@@ -1,0 +1,9 @@
+node_modules/
+dist/
+cdk.out/
+*.js
+*.d.ts
+!jest.config.js
+
+# Override root .gitignore which ignores bin/ for Eclipse
+!bin/

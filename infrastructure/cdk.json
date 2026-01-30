@@ -1,0 +1,7 @@
+{
+  "app": "npx ts-node bin/imaginify-infra.ts",
+  "context": {
+    "@aws-cdk/aws-s3:serverAccessLogsUseBucketPolicy": true,
+    "@aws-cdk/core:stackRelativeExports": true
+  }
+}
