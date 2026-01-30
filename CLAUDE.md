@@ -25,15 +25,31 @@ cd backend
 
 - Java 21 required
 - Spring Boot 3.5.5, Gradle 9.3.0 (wrapper included)
-- AWS SDK v2 for DynamoDB, S3, Secrets Manager
+- AWS SDK v2 (BOM 2.29.45) for DynamoDB, S3, Secrets Manager
 - Set `aws.dynamodb.endpoint` in `application.yml` to override for local DynamoDB testing
 - Tests use `@MockitoBean` to mock AWS clients (DynamoDbClient, S3Client, etc.) so no real AWS credentials needed
 
-### Frontend & Infrastructure
+### Infrastructure (AWS CDK + TypeScript)
 
-Not yet set up. `frontend/` and `infrastructure/` directories are empty.
-- Frontend: planned React app
-- Infrastructure: planned AWS CDK with TypeScript, targeting AWS account 115417277634 with beta/gamma/prod stages
+All commands run from `infrastructure/`:
+
+```bash
+cd infrastructure
+npm install              # install dependencies
+npm run build            # compile TypeScript (tsc)
+npm test                 # run CDK assertion tests (Jest)
+npx cdk synth            # synthesize CloudFormation templates
+npx cdk list             # list all stacks
+npx cdk deploy ImaginifyStack-beta   # deploy a specific stage
+```
+
+- CDK v2, TypeScript 5.x
+- Three stacks: `ImaginifyStack-beta`, `ImaginifyStack-gamma`, `ImaginifyStack-prod`
+- All stacks target AWS account 115417277634, us-east-1
+
+### Frontend
+
+Not yet set up. `frontend/` directory is empty. Planned as a React app.
 
 ## Architecture
 
@@ -71,6 +87,18 @@ exception/           Custom exceptions + GlobalExceptionHandler (@RestController
 
 Several services are stubs throwing `UnsupportedOperationException`: both AI client implementations, QualityAssuranceService, and ImageFormattingService.
 
+### Infrastructure Stack (`ImaginifyStack`)
+
+Single parameterized stack class instantiated per stage (beta, gamma, prod). Each stack creates:
+
+- **KMS Key** — encrypts Secrets Manager secrets, auto-rotation enabled, alias `alias/imaginify-secrets-{stage}`
+- **DynamoDB Table** — `imaginify-books-{stage}`, partition key `bookId` (String), on-demand billing, PITR enabled
+- **S3 Bucket** — `imaginify-images-{stage}-115417277634`, SSE-S3, all public access blocked, SSL enforced
+- **Secrets Manager Secret** — `imaginify/api-keys-{stage}`, KMS-encrypted, placeholder values (real keys set manually post-deploy)
+- **IAM Role** — `imaginify-backend-role-{stage}`, assumable by Lambda + EC2, least-privilege policies scoped to specific resource ARNs
+
+Stage differences: prod uses `RETAIN` removal policy; beta and gamma use `DESTROY` with `autoDeleteObjects` enabled on S3.
+
 ### Data Layer
 
 - **DynamoDB**: `imaginify-books` table, partition key `bookId`. Book entity contains nested Chapter list, each with ImageMetadata list.
@@ -84,6 +112,12 @@ Several services are stubs throwing `UnsupportedOperationException`: both AI cli
 - **Zero-Trust IAM**: explicit permissions only, no wildcards
 - **DynamoDB**: chosen for quick iteration; may migrate to relational DB later
 
+## Git Conventions
+
+Commit message format: `[Category] Descriptive message`
+
+Categories used: `[Backend]`, `[Infrastructure]`, `[Documentation]`, `[Cleanup]`
+
 ## Documentation
 
 Detailed specs in `docs/`:
@@ -91,7 +125,3 @@ Detailed specs in `docs/`:
 - `docs/technicalspecs.md` — module specs, DynamoDB schema, prompt templates, testing strategy
 - `docs/requirements.md` — functional/non-functional requirements, SLAs, security policies
 - `docs/images/diagrams/` — architecture diagrams
-
-## Current Task: Infrastructure as Code (IaC)
-
-Backend API scaffolding is complete. Next step is setting up AWS CDK in `infrastructure/` with TypeScript to define DynamoDB, S3, Lambda, API Gateway, IAM, Secrets Manager, and KMS resources. Deploy to beta first, then gamma, then prod. Do not build frontend or CI/CD pipelines yet.
