@@ -270,14 +270,6 @@ a download images button should exist on the UI under the personal library, so t
 
 POST: /images/generate
 
-FormatImages API
-
-it will have endpoints to facilitate image formatting, cropping, collaging, etc.
-
-* Really just need collage, because we can specify the format/crops in the template before generating the image
-
-POST: /format/collage
-
 5. Data Models
 
 Conceptual Data Models
