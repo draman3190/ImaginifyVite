@@ -1,0 +1,30 @@
+spring:
+  application:
+    name: imaginify-backend
+
+server:
+  port: 8080
+
+aws:
+  region: us-east-1
+  dynamodb:
+    table-name: imaginify-books
+    endpoint: ""
+  s3:
+    bucket-name: imaginify-images
+  secrets-manager:
+    api-key-secret-id: imaginify/api-keys
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info,metrics
+  endpoint:
+    health:
+      show-details: when-authorized
+
+logging:
+  level:
+    com.imaginify: DEBUG
+    software.amazon.awssdk: WARN
