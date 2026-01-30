@@ -60,18 +60,44 @@ Detailed specifications live in `docs/`:
 - 7-day backup retention with point-in-time recovery
 - Dependency scanning must block Critical/High severity vulnerabilities with available patches
 
-## Current Task: Backend Scaffolding
+## Current Task: Infrastructure as Code (IaC)
+
+### Status Update
+- ✅ Backend API scaffolding complete (Spring Boot with DynamoDB integration, image generation endpoints)
+- 🔄 Next: Infrastructure deployment
+- ⏳ Pending: Frontend development
 
 ### Immediate Goals
-1. Set up Spring Boot project structure in `backend/`
-2. Create initial API endpoints for image generation
-3. Implement DynamoDB integration
-4. Set up AWS SDK configuration
+1. Set up AWS CDK project in `infrastructure/` using TypeScript
+2. Define infrastructure resources:
+   - DynamoDB tables (book metadata, chapters, image references)
+   - S3 buckets (EPUB storage, generated images)
+   - Lambda functions (AI image generation)
+   - API Gateway (REST endpoints)
+   - IAM roles and policies (Zero-Trust model)
+   - Secrets Manager (API keys for Gemini/Grok)
+   - KMS keys (encryption)
+3. Create deployment scripts for beta/gamma/prod environments
+4. Set up CloudFormation stacks
+
+### Deployment Configuration
+- **AWS Account ID**: 115417277634
+- **Environments**: beta, gamma, prod
+- Deploy to beta first for initial testing, then gamma for pre-prod validation, then prod
 
 ### What NOT to do yet
-- Do not build frontend (comes later)
-- Do not deploy infrastructure (comes after backend is working locally)
-- Focus only on backend API and core business logic
+- Do not build frontend (comes after infrastructure is verified)
+- Do not create CI/CD pipelines yet (manual deployment first)
+- Focus on getting resources deployed to AWS
+
+### Testing Plan
+Once infrastructure is deployed to beta:
+1. Verify DynamoDB tables are created
+2. Test S3 bucket access
+3. Validate Lambda function deployment
+4. Test backend API against deployed AWS resources
+5. Confirm security policies (IAM, KMS, Secrets Manager)
+6. Promote to gamma, then prod after validation
 
 ### Starting Point
-Begin with setting up the Spring Boot application structure and core image generation service based on the architecture in `docs/technicalspecs.md`.
+Begin with AWS CDK TypeScript project setup in `infrastructure/` folder. Reference architecture in `docs/technicalspecs.md` and `docs/images/diagrams/`. Configure for AWS account 115417277634 with beta/gamma/prod stages.
