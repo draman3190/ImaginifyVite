@@ -106,8 +106,44 @@ Single parameterized stack class instantiated per stage (beta, gamma, prod). Eac
 - **S3 Bucket** — `imaginify-images-{stage}-115417277634`, SSE-S3, all public access blocked, SSL enforced
 - **Secrets Manager Secret** — `imaginify/api-keys-{stage}`, KMS-encrypted, placeholder values (real keys set manually post-deploy)
 - **IAM Role** — `imaginify-backend-role-{stage}`, assumable by Lambda + EC2, least-privilege policies scoped to specific resource ARNs
+- **Lambda Function** — `imaginify-backend-{stage}`, Java 21 runtime, Spring Boot via AWS Lambda Web Adapter layer, SnapStart enabled
+- **Lambda Alias** — `live` alias pointing to current published version (required for SnapStart)
+- **HTTP API Gateway** — `imaginify-api-{stage}`, catch-all `/{proxy+}` route to Lambda, CORS enabled
+- **CloudWatch Log Group** — `/aws/lambda/imaginify-backend-{stage}`, 1-week retention (beta/gamma), 6-month retention (prod)
 
-Stage differences: prod uses `RETAIN` removal policy; beta and gamma use `DESTROY` with `autoDeleteObjects` enabled on S3.
+Stage differences:
+- prod uses `RETAIN` removal policy; beta and gamma use `DESTROY` with `autoDeleteObjects` enabled on S3
+- Lambda memory: beta 1024MB, gamma 1536MB, prod 2048MB
+- Reserved concurrency: beta 5, gamma 10, prod unlimited
+
+### Deployment Architecture
+
+```
+Client → HTTP API Gateway → Lambda (Web Adapter Layer + Spring Boot JAR) → DynamoDB/S3/SecretsManager
+```
+
+The backend runs in Lambda using the [AWS Lambda Web Adapter](https://github.com/awslabs/aws-lambda-web-adapter). This is a Lambda Layer that runs the Spring Boot app inside Lambda and proxies API Gateway HTTP requests to it. **Zero changes to backend Java code are needed** — `./gradlew bootRun` for local development continues to work unchanged.
+
+Environment variables are set on the Lambda function to configure resource names:
+- `AWS_DYNAMODB_TABLE_NAME` — DynamoDB table name
+- `AWS_S3_BUCKET_NAME` — S3 bucket name
+- `AWS_SECRETSMANAGER_API_KEY_SECRET_ID` — Secrets Manager secret name
+- `AWS_LAMBDA_EXEC_WRAPPER` — Web Adapter bootstrap (`/opt/bootstrap`)
+- `PORT` — App port for Web Adapter (`8080`)
+- `AWS_LWA_READINESS_CHECK_PATH` — Health check path (`/actuator/health`)
+
+### Build & Deploy Workflow
+
+Deploy scripts automatically build the backend JAR before deploying:
+
+```bash
+cd infrastructure
+npm run deploy:beta    # builds JAR + deploys beta stack
+npm run deploy:gamma   # builds JAR + deploys gamma stack
+npm run deploy:prod    # builds JAR + deploys prod stack
+```
+
+To build the backend JAR independently: `npm run build:backend` (from `infrastructure/`).
 
 ### Data Layer
 
