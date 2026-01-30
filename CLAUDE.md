@@ -28,6 +28,11 @@ cd backend
 - AWS SDK v2 (BOM 2.29.45) for DynamoDB, S3, Secrets Manager
 - Set `aws.dynamodb.endpoint` in `application.yml` to override for local DynamoDB testing
 - Tests use `@MockitoBean` to mock AWS clients (DynamoDbClient, S3Client, etc.) so no real AWS credentials needed
+- **Running against a deployed stage** — override resource names via args:
+  ```bash
+  ./gradlew bootRun --args='--aws.dynamodb.table-name=imaginify-books-beta --aws.s3.bucket-name=imaginify-images-beta-115417277634 --aws.secrets-manager.api-key-secret-id=imaginify/api-keys-beta'
+  ```
+  Resource naming pattern: `{base-name}-{stage}` (S3 also appends the account ID)
 
 ### Infrastructure (AWS CDK + TypeScript)
 
@@ -38,14 +43,19 @@ cd infrastructure
 npm install              # install dependencies
 npm run build            # compile TypeScript (tsc)
 npm test                 # run CDK assertion tests (Jest)
-npx cdk synth            # synthesize CloudFormation templates
+npm run synth            # synthesize CloudFormation templates
+npm run deploy:beta      # deploy beta stack
+npm run deploy:gamma     # deploy gamma stack
+npm run deploy:prod      # deploy prod stack
+npm run deploy:all       # deploy all stacks
 npx cdk list             # list all stacks
-npx cdk deploy ImaginifyStack-beta   # deploy a specific stage
 ```
 
-- CDK v2, TypeScript 5.x
+- CDK v2, TypeScript 5.x; CDK CLI installed as devDependency (`aws-cdk` package)
 - Three stacks: `ImaginifyStack-beta`, `ImaginifyStack-gamma`, `ImaginifyStack-prod`
 - All stacks target AWS account 115417277634, us-east-1
+- **First-time setup**: CDK bootstrap is required before first deploy: `npx cdk bootstrap aws://115417277634/us-east-1`
+- AWS credentials must be configured (`aws configure`) before deploy
 
 ### Frontend
 
