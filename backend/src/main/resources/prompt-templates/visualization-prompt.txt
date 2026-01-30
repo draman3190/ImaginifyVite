@@ -1,0 +1,31 @@
+STYLE & MEDIUM
+{ART_STYLE_DESCRIPTION}
+
+BOOK CONTEXT
+This illustration is for a book titled "{BOOK_TITLE}" by {BOOK_AUTHORS}.
+Genre: {BOOK_GENRE}
+Overall tone of the book: {BOOK_TONE}
+
+CHAPTER CONTEXT
+Chapter {CHAPTER_NUMBER}: "{CHAPTER_TITLE}"
+
+TEXT RANGE TO VISUALIZE (Pages {PAGE_START}–{PAGE_END})
+The following text represents approximately two consecutive pages of the book.
+Create a single illustration that captures the key events, atmosphere, and emotional tone across this entire range, rather than a single moment.
+
+TEXT SUMMARY
+{TEXT_SUMMARY}
+
+SCENE INSTRUCTION
+Depict a symbolic or atmospheric scene that reflects what is happening during these pages.
+Prioritize mood, setting, and emotional subtext over literal accuracy.
+The image should give the reader an intuitive sense of what these pages are about.
+
+VISUAL CONSTRAINTS
+- No text, captions, or lettering in the image
+- Avoid photorealism; this is an illustrated book
+- No modern objects unless explicitly relevant to the story
+- Maintain stylistic consistency with other illustrations in the book
+
+OUTPUT GUIDANCE
+High-quality illustration suitable for a printed literary book.
