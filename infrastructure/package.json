@@ -4,7 +4,12 @@
   "private": true,
   "scripts": {
     "build": "tsc",
-    "test": "jest --config jest.config.js"
+    "test": "jest --config jest.config.js",
+    "synth": "cdk synth",
+    "deploy:beta": "cdk deploy ImaginifyStack-beta",
+    "deploy:gamma": "cdk deploy ImaginifyStack-gamma",
+    "deploy:prod": "cdk deploy ImaginifyStack-prod",
+    "deploy:all": "cdk deploy --all"
   },
   "dependencies": {
     "aws-cdk-lib": "^2.175.1",
