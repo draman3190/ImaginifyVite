@@ -4,6 +4,11 @@ import * as s3 from 'aws-cdk-lib/aws-s3';
 import * as secretsmanager from 'aws-cdk-lib/aws-secretsmanager';
 import * as kms from 'aws-cdk-lib/aws-kms';
 import * as iam from 'aws-cdk-lib/aws-iam';
+import * as lambda from 'aws-cdk-lib/aws-lambda';
+import * as logs from 'aws-cdk-lib/aws-logs';
+import * as apigatewayv2 from 'aws-cdk-lib/aws-apigatewayv2';
+import * as apigatewayv2Integrations from 'aws-cdk-lib/aws-apigatewayv2-integrations';
+import * as path from 'path';
 import { Construct } from 'constructs';
 import { StageConfig } from './stage-config';
 
@@ -17,6 +22,8 @@ export class ImaginifyStack extends cdk.Stack {
   public readonly secret: secretsmanager.Secret;
   public readonly encryptionKey: kms.Key;
   public readonly backendRole: iam.Role;
+  public readonly backendFunction: lambda.Function;
+  public readonly httpApi: apigatewayv2.HttpApi;
 
   constructor(scope: Construct, id: string, props: ImaginifyStackProps) {
     super(scope, id, props);
@@ -120,6 +127,15 @@ export class ImaginifyStack extends cdk.Stack {
       resources: [this.encryptionKey.keyArn],
     }));
 
+    // CloudWatch Log Group for Lambda
+    const logGroup = new logs.LogGroup(this, 'BackendLogGroup', {
+      logGroupName: `/aws/lambda/imaginify-backend-${stage}`,
+      retention: stage === 'prod'
+        ? logs.RetentionDays.SIX_MONTHS
+        : logs.RetentionDays.ONE_WEEK,
+      removalPolicy: stageConfig.removalPolicy,
+    });
+
     // CloudWatch Logs policy
     this.backendRole.addToPolicy(new iam.PolicyStatement({
       effect: iam.Effect.ALLOW,
@@ -130,7 +146,80 @@ export class ImaginifyStack extends cdk.Stack {
       ],
       resources: [
         `arn:aws:logs:${stageConfig.region}:${stageConfig.account}:log-group:/aws/imaginify/*`,
+        logGroup.logGroupArn,
+        `${logGroup.logGroupArn}:*`,
       ],
     }));
+
+    // AWS Lambda Web Adapter layer (enables running Spring Boot in Lambda with zero code changes)
+    const webAdapterLayer = lambda.LayerVersion.fromLayerVersionArn(
+      this, 'WebAdapterLayer',
+      `arn:aws:lambda:${stageConfig.region}:753240598075:layer:LambdaAdapterLayerX86:24`,
+    );
+
+    // Lambda Function running Spring Boot via Web Adapter
+    this.backendFunction = new lambda.Function(this, 'BackendFunction', {
+      functionName: `imaginify-backend-${stage}`,
+      runtime: lambda.Runtime.JAVA_21,
+      handler: 'org.springframework.cloud.function.adapter.aws.FunctionInvoker',
+      code: lambda.Code.fromAsset(path.join(__dirname, '../../backend/build/libs')),
+      memorySize: stageConfig.lambdaMemoryMb,
+      timeout: cdk.Duration.seconds(stageConfig.lambdaTimeoutSeconds),
+      role: this.backendRole,
+      environment: {
+        AWS_LAMBDA_EXEC_WRAPPER: '/opt/bootstrap',
+        PORT: '8080',
+        AWS_LWA_READINESS_CHECK_PATH: '/actuator/health',
+        AWS_DYNAMODB_TABLE_NAME: this.table.tableName,
+        AWS_S3_BUCKET_NAME: this.bucket.bucketName,
+        AWS_SECRETSMANAGER_API_KEY_SECRET_ID: this.secret.secretName,
+      },
+      layers: [webAdapterLayer],
+      logGroup,
+      snapStart: lambda.SnapStartConf.ON_PUBLISHED_VERSIONS,
+      ...(stageConfig.lambdaReservedConcurrency !== undefined && {
+        reservedConcurrentExecutions: stageConfig.lambdaReservedConcurrency,
+      }),
+    });
+
+    // Lambda alias for SnapStart (SnapStart only applies to published versions)
+    const liveAlias = new lambda.Alias(this, 'BackendLiveAlias', {
+      aliasName: 'live',
+      version: this.backendFunction.currentVersion,
+    });
+
+    // HTTP API Gateway
+    this.httpApi = new apigatewayv2.HttpApi(this, 'BackendHttpApi', {
+      apiName: `imaginify-api-${stage}`,
+      corsPreflight: {
+        allowOrigins: ['*'],
+        allowMethods: [
+          apigatewayv2.CorsHttpMethod.GET,
+          apigatewayv2.CorsHttpMethod.POST,
+          apigatewayv2.CorsHttpMethod.PUT,
+          apigatewayv2.CorsHttpMethod.DELETE,
+          apigatewayv2.CorsHttpMethod.OPTIONS,
+        ],
+        allowHeaders: ['Content-Type', 'Authorization'],
+        maxAge: cdk.Duration.hours(1),
+      },
+    });
+
+    // Catch-all route to Lambda alias
+    this.httpApi.addRoutes({
+      path: '/{proxy+}',
+      methods: [apigatewayv2.HttpMethod.ANY],
+      integration: new apigatewayv2Integrations.HttpLambdaIntegration(
+        'BackendIntegration',
+        liveAlias,
+      ),
+    });
+
+    // Output the API Gateway URL
+    new cdk.CfnOutput(this, 'ApiUrl', {
+      value: this.httpApi.apiEndpoint,
+      description: `Imaginify API Gateway URL (${stage})`,
+      exportName: `imaginify-api-url-${stage}`,
+    });
   }
 }

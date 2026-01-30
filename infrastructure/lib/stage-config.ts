@@ -6,6 +6,9 @@ export interface StageConfig {
   readonly region: string;
   readonly removalPolicy: RemovalPolicy;
   readonly autoDeleteObjects: boolean;
+  readonly lambdaMemoryMb: number;
+  readonly lambdaTimeoutSeconds: number;
+  readonly lambdaReservedConcurrency?: number;
 }
 
 const ACCOUNT = '115417277634';
@@ -18,6 +21,9 @@ export const STAGE_CONFIGS: Record<string, StageConfig> = {
     region: REGION,
     removalPolicy: RemovalPolicy.DESTROY,
     autoDeleteObjects: true,
+    lambdaMemoryMb: 1024,
+    lambdaTimeoutSeconds: 30,
+    lambdaReservedConcurrency: 5,
   },
   gamma: {
     stageName: 'gamma',
@@ -25,6 +31,9 @@ export const STAGE_CONFIGS: Record<string, StageConfig> = {
     region: REGION,
     removalPolicy: RemovalPolicy.DESTROY,
     autoDeleteObjects: true,
+    lambdaMemoryMb: 1536,
+    lambdaTimeoutSeconds: 30,
+    lambdaReservedConcurrency: 10,
   },
   prod: {
     stageName: 'prod',
@@ -32,5 +41,7 @@ export const STAGE_CONFIGS: Record<string, StageConfig> = {
     region: REGION,
     removalPolicy: RemovalPolicy.RETAIN,
     autoDeleteObjects: false,
+    lambdaMemoryMb: 2048,
+    lambdaTimeoutSeconds: 30,
   },
 };

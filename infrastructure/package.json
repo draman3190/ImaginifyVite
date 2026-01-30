@@ -4,11 +4,17 @@
   "private": true,
   "scripts": {
     "build": "tsc",
+    "build:backend": "cd ../backend && ./gradlew bootJar",
+    "pretest": "npm run build:backend",
     "test": "jest --config jest.config.js",
     "synth": "npx cdk synth",
+    "predeploy:beta": "npm run build:backend",
     "deploy:beta": "npx cdk deploy ImaginifyStack-beta",
+    "predeploy:gamma": "npm run build:backend",
     "deploy:gamma": "npx cdk deploy ImaginifyStack-gamma",
+    "predeploy:prod": "npm run build:backend",
     "deploy:prod": "npx cdk deploy ImaginifyStack-prod",
+    "predeploy:all": "npm run build:backend",
     "deploy:all": "npx cdk deploy --all"
   },
   "dependencies": {
