@@ -198,6 +198,108 @@ describe('ImaginifyStack', () => {
     betaTemplate.resourceCountIs('AWS::S3::Bucket', 1);
     betaTemplate.resourceCountIs('AWS::SecretsManager::Secret', 1);
     betaTemplate.resourceCountIs('AWS::KMS::Key', 1);
-    betaTemplate.resourceCountIs('AWS::IAM::Role', 2); // backend role + custom resource role for auto-delete
+    betaTemplate.resourceCountIs('AWS::Lambda::Function', 2); // backend + S3 auto-delete custom resource
+    betaTemplate.resourceCountIs('AWS::ApiGatewayV2::Api', 1);
+    betaTemplate.resourceCountIs('AWS::Logs::LogGroup', 1);
+    betaTemplate.resourceCountIs('AWS::Lambda::Alias', 1);
+    betaTemplate.resourceCountIs('AWS::Lambda::Version', 1);
+  });
+
+  // --- Lambda + API Gateway tests ---
+
+  test('creates Lambda function with correct configuration', () => {
+    betaTemplate.hasResourceProperties('AWS::Lambda::Function', {
+      FunctionName: 'imaginify-backend-beta',
+      Runtime: 'java21',
+      MemorySize: 1024,
+      Timeout: 30,
+      SnapStart: { ApplyOn: 'PublishedVersions' },
+      Environment: Match.objectLike({
+        Variables: Match.objectLike({
+          AWS_LAMBDA_EXEC_WRAPPER: '/opt/bootstrap',
+          PORT: '8080',
+          AWS_LWA_READINESS_CHECK_PATH: '/actuator/health',
+          AWS_DYNAMODB_TABLE_NAME: Match.anyValue(),
+          AWS_S3_BUCKET_NAME: Match.anyValue(),
+          AWS_SECRETSMANAGER_API_KEY_SECRET_ID: Match.anyValue(),
+        }),
+      }),
+    });
+  });
+
+  test('Lambda function includes Web Adapter layer', () => {
+    betaTemplate.hasResourceProperties('AWS::Lambda::Function', {
+      Layers: Match.arrayWith([
+        'arn:aws:lambda:us-east-1:753240598075:layer:LambdaAdapterLayerX86:24',
+      ]),
+    });
+  });
+
+  test('Lambda function has SnapStart enabled', () => {
+    betaTemplate.hasResourceProperties('AWS::Lambda::Function', {
+      SnapStart: { ApplyOn: 'PublishedVersions' },
+    });
+  });
+
+  test('Lambda alias named live is created', () => {
+    betaTemplate.hasResourceProperties('AWS::Lambda::Alias', {
+      Name: 'live',
+    });
+  });
+
+  test('HTTP API Gateway is created with correct name', () => {
+    betaTemplate.hasResourceProperties('AWS::ApiGatewayV2::Api', {
+      Name: 'imaginify-api-beta',
+      ProtocolType: 'HTTP',
+    });
+  });
+
+  test('HTTP API Gateway has CORS configured', () => {
+    betaTemplate.hasResourceProperties('AWS::ApiGatewayV2::Api', {
+      CorsConfiguration: Match.objectLike({
+        AllowOrigins: ['*'],
+        AllowMethods: Match.arrayWith(['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS']),
+        AllowHeaders: ['Content-Type', 'Authorization'],
+      }),
+    });
+  });
+
+  test('HTTP API Gateway has catch-all route', () => {
+    betaTemplate.hasResourceProperties('AWS::ApiGatewayV2::Route', {
+      RouteKey: 'ANY /{proxy+}',
+    });
+  });
+
+  test('CloudWatch log group is created with correct retention', () => {
+    betaTemplate.hasResourceProperties('AWS::Logs::LogGroup', {
+      LogGroupName: '/aws/lambda/imaginify-backend-beta',
+      RetentionInDays: 7,
+    });
+  });
+
+  test('prod CloudWatch log group has 6-month retention', () => {
+    prodTemplate.hasResourceProperties('AWS::Logs::LogGroup', {
+      LogGroupName: '/aws/lambda/imaginify-backend-prod',
+      RetentionInDays: 180,
+    });
+  });
+
+  test('stack outputs API Gateway URL', () => {
+    betaTemplate.hasOutput('ApiUrl', {
+      Export: { Name: 'imaginify-api-url-beta' },
+    });
+  });
+
+  test('prod Lambda function has higher memory', () => {
+    prodTemplate.hasResourceProperties('AWS::Lambda::Function', {
+      FunctionName: 'imaginify-backend-prod',
+      MemorySize: 2048,
+    });
+  });
+
+  test('beta Lambda function has reserved concurrency', () => {
+    betaTemplate.hasResourceProperties('AWS::Lambda::Function', {
+      ReservedConcurrentExecutions: 5,
+    });
   });
 });
