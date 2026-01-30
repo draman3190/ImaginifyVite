@@ -1,6 +1,7 @@
 package com.imaginify.repository;
 
 import com.imaginify.model.Book;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Repository;
 import software.amazon.awssdk.enhanced.dynamodb.DynamoDbEnhancedClient;
 import software.amazon.awssdk.enhanced.dynamodb.DynamoDbTable;
@@ -15,8 +16,9 @@ public class BookRepository {
 
     private final DynamoDbTable<Book> bookTable;
 
-    public BookRepository(DynamoDbEnhancedClient enhancedClient) {
-        this.bookTable = enhancedClient.table("imaginify-books", TableSchema.fromBean(Book.class));
+    public BookRepository(DynamoDbEnhancedClient enhancedClient,
+                          @Value("${aws.dynamodb.table-name}") String tableName) {
+        this.bookTable = enhancedClient.table(tableName, TableSchema.fromBean(Book.class));
     }
 
     public void save(Book book) {
