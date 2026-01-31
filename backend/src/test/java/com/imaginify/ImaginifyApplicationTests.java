@@ -6,6 +6,7 @@ import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import software.amazon.awssdk.enhanced.dynamodb.DynamoDbEnhancedClient;
 import software.amazon.awssdk.services.dynamodb.DynamoDbClient;
 import software.amazon.awssdk.services.s3.S3Client;
+import software.amazon.awssdk.services.s3.presigner.S3Presigner;
 import software.amazon.awssdk.services.secretsmanager.SecretsManagerClient;
 
 @SpringBootTest
@@ -19,6 +20,9 @@ class ImaginifyApplicationTests {
 
     @MockitoBean
     private S3Client s3Client;
+
+    @MockitoBean
+    private S3Presigner s3Presigner;
 
     @MockitoBean
     private SecretsManagerClient secretsManagerClient;
