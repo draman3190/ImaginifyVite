@@ -49,3 +49,10 @@ tasks.named<org.springframework.boot.gradle.tasks.bundling.BootJar>("bootJar") {
 tasks.named<Jar>("jar") {
     enabled = false
 }
+
+tasks.register<Copy>("packageLambda") {
+    dependsOn("bootJar")
+    from(tasks.named("bootJar"))
+    from("src/main/lambda")
+    into(layout.buildDirectory.dir("lambda"))
+}
