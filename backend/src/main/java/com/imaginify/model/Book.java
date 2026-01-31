@@ -18,6 +18,9 @@ public class Book {
     private List<String> genre;
     private int pageCount;
     private String epubFileUrl;
+    private String uploadTimestamp;
+    private String processingStatus;
+    private String description;
     private List<Chapter> chapters;
 
     @DynamoDbPartitionKey
@@ -99,6 +102,30 @@ public class Book {
 
     public void setEpubFileUrl(String epubFileUrl) {
         this.epubFileUrl = epubFileUrl;
+    }
+
+    public String getUploadTimestamp() {
+        return uploadTimestamp;
+    }
+
+    public void setUploadTimestamp(String uploadTimestamp) {
+        this.uploadTimestamp = uploadTimestamp;
+    }
+
+    public String getProcessingStatus() {
+        return processingStatus;
+    }
+
+    public void setProcessingStatus(String processingStatus) {
+        this.processingStatus = processingStatus;
+    }
+
+    public String getDescription() {
+        return description;
+    }
+
+    public void setDescription(String description) {
+        this.description = description;
     }
 
     public List<Chapter> getChapters() {
