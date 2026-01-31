@@ -23,7 +23,6 @@ export const STAGE_CONFIGS: Record<string, StageConfig> = {
     autoDeleteObjects: true,
     lambdaMemoryMb: 1024,
     lambdaTimeoutSeconds: 30,
-    lambdaReservedConcurrency: 5,
   },
   gamma: {
     stageName: 'gamma',

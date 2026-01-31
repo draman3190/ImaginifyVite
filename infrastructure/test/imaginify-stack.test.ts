@@ -214,7 +214,6 @@ describe('ImaginifyStack', () => {
       Runtime: 'java21',
       MemorySize: 1024,
       Timeout: 30,
-      SnapStart: { ApplyOn: 'PublishedVersions' },
       Environment: Match.objectLike({
         Variables: Match.objectLike({
           AWS_LAMBDA_EXEC_WRAPPER: '/opt/bootstrap',
@@ -231,14 +230,8 @@ describe('ImaginifyStack', () => {
   test('Lambda function includes Web Adapter layer', () => {
     betaTemplate.hasResourceProperties('AWS::Lambda::Function', {
       Layers: Match.arrayWith([
-        'arn:aws:lambda:us-east-1:753240598075:layer:LambdaAdapterLayerX86:24',
+        'arn:aws:lambda:us-east-1:753240598075:layer:LambdaAdapterLayerX86:25',
       ]),
-    });
-  });
-
-  test('Lambda function has SnapStart enabled', () => {
-    betaTemplate.hasResourceProperties('AWS::Lambda::Function', {
-      SnapStart: { ApplyOn: 'PublishedVersions' },
     });
   });
 
@@ -298,9 +291,4 @@ describe('ImaginifyStack', () => {
     });
   });
 
-  test('beta Lambda function has reserved concurrency', () => {
-    betaTemplate.hasResourceProperties('AWS::Lambda::Function', {
-      ReservedConcurrentExecutions: 5,
-    });
-  });
 });

@@ -155,15 +155,15 @@ export class ImaginifyStack extends cdk.Stack {
     // AWS Lambda Web Adapter layer (enables running Spring Boot in Lambda with zero code changes)
     const webAdapterLayer = lambda.LayerVersion.fromLayerVersionArn(
       this, 'WebAdapterLayer',
-      `arn:aws:lambda:${stageConfig.region}:753240598075:layer:LambdaAdapterLayerX86:24`,
+      `arn:aws:lambda:${stageConfig.region}:753240598075:layer:LambdaAdapterLayerX86:25`,
     );
 
     // Lambda Function running Spring Boot via Web Adapter
     this.backendFunction = new lambda.Function(this, 'BackendFunction', {
       functionName: `imaginify-backend-${stage}`,
       runtime: lambda.Runtime.JAVA_21,
-      handler: 'org.springframework.cloud.function.adapter.aws.FunctionInvoker',
-      code: lambda.Code.fromAsset(path.join(__dirname, '../../backend/build/libs')),
+      handler: 'run.sh',
+      code: lambda.Code.fromAsset(path.join(__dirname, '../../backend/build/lambda')),
       memorySize: stageConfig.lambdaMemoryMb,
       timeout: cdk.Duration.seconds(stageConfig.lambdaTimeoutSeconds),
       role: this.backendRole,
@@ -177,7 +177,6 @@ export class ImaginifyStack extends cdk.Stack {
       },
       layers: [webAdapterLayer],
       logGroup,
-      snapStart: lambda.SnapStartConf.ON_PUBLISHED_VERSIONS,
       ...(stageConfig.lambdaReservedConcurrency !== undefined && {
         reservedConcurrentExecutions: stageConfig.lambdaReservedConcurrency,
       }),
