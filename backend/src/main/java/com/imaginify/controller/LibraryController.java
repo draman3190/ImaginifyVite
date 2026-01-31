@@ -3,6 +3,8 @@ package com.imaginify.controller;
 import com.imaginify.dto.request.UploadBookRequest;
 import com.imaginify.dto.response.BookResponse;
 import com.imaginify.dto.response.BookSummaryResponse;
+import com.imaginify.dto.response.PresignedDownloadUrlResponse;
+import com.imaginify.dto.response.PresignedUploadUrlResponse;
 import com.imaginify.service.LibraryService;
 import jakarta.validation.Valid;
 import org.slf4j.Logger;
@@ -59,5 +61,26 @@ public class LibraryController {
         log.info("Received delete request for book: {}", bookId);
         libraryService.deleteBook(bookId);
         return ResponseEntity.noContent().build();
+    }
+
+    @PostMapping("/upload-url")
+    public ResponseEntity<PresignedUploadUrlResponse> getUploadUrl(@RequestParam String filename) {
+        log.info("Received upload URL request for: {}", filename);
+        PresignedUploadUrlResponse response = libraryService.initiateUpload(filename);
+        return ResponseEntity.status(HttpStatus.CREATED).body(response);
+    }
+
+    @PostMapping("/{bookId}/confirm-upload")
+    public ResponseEntity<BookResponse> confirmUpload(@PathVariable String bookId) {
+        log.info("Received upload confirmation for book: {}", bookId);
+        BookResponse response = libraryService.confirmUpload(bookId);
+        return ResponseEntity.ok(response);
+    }
+
+    @GetMapping("/{bookId}/download-url")
+    public ResponseEntity<PresignedDownloadUrlResponse> getDownloadUrl(@PathVariable String bookId) {
+        log.info("Received download URL request for book: {}", bookId);
+        PresignedDownloadUrlResponse response = libraryService.getDownloadUrl(bookId);
+        return ResponseEntity.ok(response);
     }
 }
