@@ -24,6 +24,9 @@ management:
   endpoint:
     health:
       show-details: when-authorized
+  health:
+    diskspace:
+      enabled: false
 
 logging:
   level:
