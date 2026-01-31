@@ -12,6 +12,7 @@ aws:
     endpoint: ""
   s3:
     bucket-name: imaginify-images
+    presigned-url-expiration-minutes: 15
   secrets-manager:
     api-key-secret-id: imaginify/api-keys
 
