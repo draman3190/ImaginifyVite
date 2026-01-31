@@ -103,6 +103,7 @@ export class ImaginifyStack extends cdk.Stack {
         's3:GetObject',
         's3:PutObject',
         's3:DeleteObject',
+        's3:HeadObject',
       ],
       resources: [`${this.bucket.bucketArn}/*`],
     }));
