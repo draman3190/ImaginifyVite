@@ -15,5 +15,8 @@ public record BookResponse(
         List<String> genre,
         int pageCount,
         String epubFileUrl,
+        String uploadTimestamp,
+        String processingStatus,
+        String description,
         List<Chapter> chapters
 ) {}

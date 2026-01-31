@@ -8,7 +8,14 @@ import software.amazon.awssdk.core.sync.RequestBody;
 import software.amazon.awssdk.services.s3.S3Client;
 import software.amazon.awssdk.services.s3.model.DeleteObjectRequest;
 import software.amazon.awssdk.services.s3.model.GetObjectRequest;
+import software.amazon.awssdk.services.s3.model.HeadObjectRequest;
+import software.amazon.awssdk.services.s3.model.NoSuchKeyException;
 import software.amazon.awssdk.services.s3.model.PutObjectRequest;
+import software.amazon.awssdk.services.s3.presigner.S3Presigner;
+import software.amazon.awssdk.services.s3.presigner.model.GetObjectPresignRequest;
+import software.amazon.awssdk.services.s3.presigner.model.PutObjectPresignRequest;
+
+import java.time.Duration;
 
 @Service
 public class StorageService {
@@ -16,11 +23,18 @@ public class StorageService {
     private static final Logger log = LoggerFactory.getLogger(StorageService.class);
 
     private final S3Client s3Client;
+    private final S3Presigner s3Presigner;
     private final String bucketName;
+    private final int presignedUrlExpirationMinutes;
 
-    public StorageService(S3Client s3Client, @Value("${aws.s3.bucket-name}") String bucketName) {
+    public StorageService(S3Client s3Client,
+                          S3Presigner s3Presigner,
+                          @Value("${aws.s3.bucket-name}") String bucketName,
+                          @Value("${aws.s3.presigned-url-expiration-minutes}") int presignedUrlExpirationMinutes) {
         this.s3Client = s3Client;
+        this.s3Presigner = s3Presigner;
         this.bucketName = bucketName;
+        this.presignedUrlExpirationMinutes = presignedUrlExpirationMinutes;
     }
 
     public String uploadImage(String key, byte[] imageData, String contentType) {
@@ -52,5 +66,52 @@ public class StorageService {
                         .bucket(bucketName)
                         .key(key)
                         .build());
+    }
+
+    public String generatePresignedUploadUrl(String key, String contentType) {
+        log.info("Generating presigned upload URL: bucket={}, key={}", bucketName, key);
+        PutObjectRequest putObjectRequest = PutObjectRequest.builder()
+                .bucket(bucketName)
+                .key(key)
+                .contentType(contentType)
+                .build();
+
+        PutObjectPresignRequest presignRequest = PutObjectPresignRequest.builder()
+                .signatureDuration(Duration.ofMinutes(presignedUrlExpirationMinutes))
+                .putObjectRequest(putObjectRequest)
+                .build();
+
+        return s3Presigner.presignPutObject(presignRequest).url().toString();
+    }
+
+    public String generatePresignedDownloadUrl(String key) {
+        log.info("Generating presigned download URL: bucket={}, key={}", bucketName, key);
+        GetObjectRequest getObjectRequest = GetObjectRequest.builder()
+                .bucket(bucketName)
+                .key(key)
+                .build();
+
+        GetObjectPresignRequest presignRequest = GetObjectPresignRequest.builder()
+                .signatureDuration(Duration.ofMinutes(presignedUrlExpirationMinutes))
+                .getObjectRequest(getObjectRequest)
+                .build();
+
+        return s3Presigner.presignGetObject(presignRequest).url().toString();
+    }
+
+    public boolean objectExists(String key) {
+        try {
+            s3Client.headObject(HeadObjectRequest.builder()
+                    .bucket(bucketName)
+                    .key(key)
+                    .build());
+            return true;
+        } catch (NoSuchKeyException e) {
+            return false;
+        }
+    }
+
+    public int getPresignedUrlExpirationMinutes() {
+        return presignedUrlExpirationMinutes;
     }
 }

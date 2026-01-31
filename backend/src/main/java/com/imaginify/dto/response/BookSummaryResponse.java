@@ -7,5 +7,6 @@ public record BookSummaryResponse(
         String title,
         List<String> authors,
         List<String> genre,
-        int pageCount
+        int pageCount,
+        String processingStatus
 ) {}
