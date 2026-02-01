@@ -20,8 +20,8 @@ Priority	Actor	ID	Module	Requirement
 0	Reader	P0-09	Settings and Configuration	I want to be able to quickly customize my unique experience
 0	Reader	P0-10	Personal Library	I want to be able to see a list of my personal library of books
 0	Reader	P0-11	Personal Library	I want to be able to quickly search my library of books
-0	Reader	P0-12	Personal Library	I want to be able to upload my existing collection of electronic books in EPUB format
-0	Reader	P0-13	Personal Library	I want to be able to upload publicly available electronic books in EPUB format
+0	Reader	P0-12	Personal Library	I want to be able to upload my existing collection of electronic books in plain text (.txt) format
+0	Reader	P0-13	Personal Library	I want to be able to upload publicly available electronic books in plain text (.txt) format
 1	Reader	P0-01	AI Visualization Generation	I want the visualizations generated on page turn to generate within 500 ms
 1	Reader	P1-02	AI Visualization Generation	I want generated visualizations to remain consistent throughout the reading experience
 1	Reader	P1-03	AI Visualization Generation	I want generated visualizations to remain the same even if I choose to re-read the book later in time
@@ -303,7 +303,7 @@ Database Schema:
 "isbn": "978-1234567890",
 "genre": ["Technology", "Science"],
 "pageCount": 320,
-"epubFileUrl": "s3://mybucket/epubs/book_001.epub",
+"fileUrl": "s3://mybucket/books/book_001.txt",
 "chapters": [
 {
 "chapterNumber": 1,
@@ -333,7 +333,7 @@ Database Schema:
 ]
 }
 
-* The epub copy will be stored in S3 and the URL will be saved to DynamoDB for that particular book entry. You can retrieve it freely this way through code.
+* The plain text (.txt) book file will be stored in S3 and the URL will be saved to DynamoDB for that particular book entry. You can retrieve it freely this way through code.
 * Each chapter will be parsed through code and stored in the table as well so that the necessary images can be pre-generated and stored in the table before the user begins to read the story.
 
 

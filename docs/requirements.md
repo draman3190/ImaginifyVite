@@ -140,8 +140,8 @@ Context: This module will be responsible for the business logic related to query
     * Reader
         * I want to be able to see a list of my personal library of books
         * I want to be able to quickly search my library of books
-        * I want to be able to upload my existing collection of electronic books in EPUB format
-        * I want to be able to upload publicly available electronic books in EPUB format
+        * I want to be able to upload my existing collection of electronic books in plain text (.txt) format
+        * I want to be able to upload publicly available electronic books in plain text (.txt) format
 * P1
     * Reader
         * I want to be able to visibly see my personal library of books
