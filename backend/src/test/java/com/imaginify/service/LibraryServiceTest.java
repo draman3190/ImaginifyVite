@@ -5,10 +5,10 @@ import com.imaginify.dto.response.BookSummaryResponse;
 import com.imaginify.dto.response.PresignedDownloadUrlResponse;
 import com.imaginify.dto.response.PresignedUploadUrlResponse;
 import com.imaginify.exception.BookNotFoundException;
-import com.imaginify.exception.EpubProcessingException;
+import com.imaginify.exception.BookProcessingException;
 import com.imaginify.model.Book;
-import com.imaginify.model.EpubChapter;
-import com.imaginify.model.EpubMetadata;
+import com.imaginify.model.TextChapter;
+import com.imaginify.model.TextMetadata;
 import com.imaginify.model.ProcessingStatus;
 import com.imaginify.repository.BookRepository;
 import org.junit.jupiter.api.BeforeEach;
@@ -37,13 +37,13 @@ class LibraryServiceTest {
     private StorageService storageService;
 
     @Mock
-    private EpubParsingService epubParsingService;
+    private TextParsingService textParsingService;
 
     private LibraryService libraryService;
 
     @BeforeEach
     void setUp() {
-        libraryService = new LibraryService(bookRepository, storageService, epubParsingService);
+        libraryService = new LibraryService(bookRepository, storageService, textParsingService);
     }
 
     @Test
@@ -114,7 +114,7 @@ class LibraryServiceTest {
 
         libraryService.deleteBook("id-1");
 
-        verify(storageService).deleteFile("epubs/id-1.epub");
+        verify(storageService).deleteFile("books/id-1.txt");
         verify(bookRepository).deleteById("id-1");
     }
 
@@ -142,42 +142,40 @@ class LibraryServiceTest {
                 .thenReturn("https://s3.example.com/upload-url");
         when(storageService.getPresignedUrlExpirationMinutes()).thenReturn(15);
 
-        PresignedUploadUrlResponse result = libraryService.initiateUpload("mybook.epub");
+        PresignedUploadUrlResponse result = libraryService.initiateUpload("mybook.txt");
 
         assertNotNull(result.bookId());
         assertEquals("https://s3.example.com/upload-url", result.uploadUrl());
-        assertTrue(result.s3Key().startsWith("epubs/"));
-        assertTrue(result.s3Key().endsWith(".epub"));
+        assertTrue(result.s3Key().startsWith("books/"));
+        assertTrue(result.s3Key().endsWith(".txt"));
         assertEquals(15, result.expirationMinutes());
 
         ArgumentCaptor<Book> bookCaptor = ArgumentCaptor.forClass(Book.class);
         verify(bookRepository).save(bookCaptor.capture());
         Book savedBook = bookCaptor.getValue();
-        assertEquals("mybook.epub", savedBook.getTitle());
+        assertEquals("mybook.txt", savedBook.getTitle());
         assertEquals(ProcessingStatus.PENDING_UPLOAD.name(), savedBook.getProcessingStatus());
         assertNotNull(savedBook.getUploadTimestamp());
     }
 
     @Test
     void confirmUpload_successfulParsing_updatesBook() {
-        Book book = createTestBook("id-1", "placeholder.epub");
+        Book book = createTestBook("id-1", "placeholder.txt");
         book.setProcessingStatus(ProcessingStatus.PENDING_UPLOAD.name());
         when(bookRepository.findById("id-1")).thenReturn(Optional.of(book));
-        when(storageService.objectExists("epubs/id-1.epub")).thenReturn(true);
-        when(storageService.downloadFile("epubs/id-1.epub")).thenReturn(new byte[]{1, 2, 3});
+        when(storageService.objectExists("books/id-1.txt")).thenReturn(true);
+        when(storageService.downloadFile("books/id-1.txt")).thenReturn(new byte[]{1, 2, 3});
 
-        EpubMetadata metadata = new EpubMetadata(
-                "Parsed Title", List.of("Author Name"), "en", "Publisher",
-                "2024-01-01", "A description", "978-0-123456-78-9",
-                List.of(new EpubChapter(1, "Chapter 1", 5000)));
-        when(epubParsingService.parse(any())).thenReturn(metadata);
+        TextMetadata metadata = new TextMetadata(
+                "Parsed Title", List.of("Author Name"), "en", 5000,
+                List.of(new TextChapter(1, "Chapter 1", 0, 5000)));
+        when(textParsingService.parse(any())).thenReturn(metadata);
 
         BookResponse result = libraryService.confirmUpload("id-1");
 
         assertEquals("Parsed Title", result.title());
         assertEquals("Author Name", result.authors().get(0));
         assertEquals("en", result.language());
-        assertEquals("A description", result.description());
         assertEquals(ProcessingStatus.COMPLETED.name(), result.processingStatus());
         assertEquals(1, result.chapters().size());
 
@@ -186,22 +184,22 @@ class LibraryServiceTest {
 
     @Test
     void confirmUpload_fileNotInS3_throwsException() {
-        Book book = createTestBook("id-1", "test.epub");
+        Book book = createTestBook("id-1", "test.txt");
         when(bookRepository.findById("id-1")).thenReturn(Optional.of(book));
-        when(storageService.objectExists("epubs/id-1.epub")).thenReturn(false);
+        when(storageService.objectExists("books/id-1.txt")).thenReturn(false);
 
-        assertThrows(EpubProcessingException.class, () -> libraryService.confirmUpload("id-1"));
+        assertThrows(BookProcessingException.class, () -> libraryService.confirmUpload("id-1"));
     }
 
     @Test
     void confirmUpload_parsingFails_setsStatusToFailed() {
-        Book book = createTestBook("id-1", "test.epub");
+        Book book = createTestBook("id-1", "test.txt");
         when(bookRepository.findById("id-1")).thenReturn(Optional.of(book));
-        when(storageService.objectExists("epubs/id-1.epub")).thenReturn(true);
-        when(storageService.downloadFile("epubs/id-1.epub")).thenReturn(new byte[]{1, 2, 3});
-        when(epubParsingService.parse(any())).thenThrow(new EpubProcessingException("Parse error"));
+        when(storageService.objectExists("books/id-1.txt")).thenReturn(true);
+        when(storageService.downloadFile("books/id-1.txt")).thenReturn(new byte[]{1, 2, 3});
+        when(textParsingService.parse(any())).thenThrow(new BookProcessingException("Parse error"));
 
-        assertThrows(EpubProcessingException.class, () -> libraryService.confirmUpload("id-1"));
+        assertThrows(BookProcessingException.class, () -> libraryService.confirmUpload("id-1"));
 
         ArgumentCaptor<Book> captor = ArgumentCaptor.forClass(Book.class);
         verify(bookRepository, atLeast(2)).save(captor.capture());
@@ -221,7 +219,7 @@ class LibraryServiceTest {
     void getDownloadUrl_existingBook_returnsPresignedUrl() {
         Book book = createTestBook("id-1", "Book One");
         when(bookRepository.findById("id-1")).thenReturn(Optional.of(book));
-        when(storageService.generatePresignedDownloadUrl("epubs/id-1.epub"))
+        when(storageService.generatePresignedDownloadUrl("books/id-1.txt"))
                 .thenReturn("https://s3.example.com/download-url");
         when(storageService.getPresignedUrlExpirationMinutes()).thenReturn(15);
 

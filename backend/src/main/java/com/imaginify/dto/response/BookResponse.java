@@ -14,7 +14,7 @@ public record BookResponse(
         String isbn,
         List<String> genre,
         int pageCount,
-        String epubFileUrl,
+        String fileUrl,
         String uploadTimestamp,
         String processingStatus,
         String description,

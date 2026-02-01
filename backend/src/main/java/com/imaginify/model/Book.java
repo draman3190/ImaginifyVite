@@ -1,5 +1,6 @@
 package com.imaginify.model;
 
+import software.amazon.awssdk.enhanced.dynamodb.mapper.annotations.DynamoDbAttribute;
 import software.amazon.awssdk.enhanced.dynamodb.mapper.annotations.DynamoDbBean;
 import software.amazon.awssdk.enhanced.dynamodb.mapper.annotations.DynamoDbPartitionKey;
 
@@ -17,7 +18,7 @@ public class Book {
     private String isbn;
     private List<String> genre;
     private int pageCount;
-    private String epubFileUrl;
+    private String fileUrl;
     private String uploadTimestamp;
     private String processingStatus;
     private String description;
@@ -96,12 +97,13 @@ public class Book {
         this.pageCount = pageCount;
     }
 
-    public String getEpubFileUrl() {
-        return epubFileUrl;
+    @DynamoDbAttribute("epubFileUrl")
+    public String getFileUrl() {
+        return fileUrl;
     }
 
-    public void setEpubFileUrl(String epubFileUrl) {
-        this.epubFileUrl = epubFileUrl;
+    public void setFileUrl(String fileUrl) {
+        this.fileUrl = fileUrl;
     }
 
     public String getUploadTimestamp() {

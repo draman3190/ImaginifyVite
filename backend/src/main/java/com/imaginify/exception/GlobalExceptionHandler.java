@@ -31,9 +31,9 @@ public class GlobalExceptionHandler {
         return ProblemDetail.forStatusAndDetail(HttpStatus.UNPROCESSABLE_ENTITY, ex.getMessage());
     }
 
-    @ExceptionHandler(EpubProcessingException.class)
-    public ProblemDetail handleEpubProcessing(EpubProcessingException ex) {
-        log.error("EPUB processing failed: {}", ex.getMessage());
+    @ExceptionHandler(BookProcessingException.class)
+    public ProblemDetail handleBookProcessing(BookProcessingException ex) {
+        log.error("Book processing failed: {}", ex.getMessage());
         return ProblemDetail.forStatusAndDetail(HttpStatus.UNPROCESSABLE_ENTITY, ex.getMessage());
     }
 

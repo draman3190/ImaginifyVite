@@ -5,7 +5,7 @@ import com.imaginify.dto.response.BookSummaryResponse;
 import com.imaginify.dto.response.PresignedDownloadUrlResponse;
 import com.imaginify.dto.response.PresignedUploadUrlResponse;
 import com.imaginify.exception.BookNotFoundException;
-import com.imaginify.exception.EpubProcessingException;
+import com.imaginify.exception.BookProcessingException;
 import com.imaginify.model.ProcessingStatus;
 import com.imaginify.service.LibraryService;
 import org.junit.jupiter.api.Test;
@@ -107,14 +107,14 @@ class LibraryControllerTest {
     @Test
     void getUploadUrl_returnsCreated() throws Exception {
         PresignedUploadUrlResponse response = new PresignedUploadUrlResponse(
-                "id-1", "https://s3.example.com/upload", "epubs/id-1.epub", 15);
-        when(libraryService.initiateUpload("mybook.epub")).thenReturn(response);
+                "id-1", "https://s3.example.com/upload", "books/id-1.txt", 15);
+        when(libraryService.initiateUpload("mybook.txt")).thenReturn(response);
 
-        mockMvc.perform(post("/library/books/upload-url").param("filename", "mybook.epub"))
+        mockMvc.perform(post("/library/books/upload-url").param("filename", "mybook.txt"))
                 .andExpect(status().isCreated())
                 .andExpect(jsonPath("$.bookId").value("id-1"))
                 .andExpect(jsonPath("$.uploadUrl").value("https://s3.example.com/upload"))
-                .andExpect(jsonPath("$.s3Key").value("epubs/id-1.epub"))
+                .andExpect(jsonPath("$.s3Key").value("books/id-1.txt"))
                 .andExpect(jsonPath("$.expirationMinutes").value(15));
     }
 
@@ -122,7 +122,7 @@ class LibraryControllerTest {
     void confirmUpload_success_returnsOk() throws Exception {
         BookResponse response = new BookResponse(
                 "id-1", "Parsed Title", List.of("Author"), "en", null, null, null,
-                null, 0, "s3://epubs/id-1.epub", "2024-01-01T00:00:00Z",
+                null, 0, "s3://books/id-1.txt", "2024-01-01T00:00:00Z",
                 "COMPLETED", "Parsed description", List.of());
         when(libraryService.confirmUpload("id-1")).thenReturn(response);
 
@@ -135,7 +135,7 @@ class LibraryControllerTest {
     @Test
     void confirmUpload_processingError_returns422() throws Exception {
         when(libraryService.confirmUpload("id-1"))
-                .thenThrow(new EpubProcessingException("Invalid EPUB"));
+                .thenThrow(new BookProcessingException("Invalid book file"));
 
         mockMvc.perform(post("/library/books/id-1/confirm-upload"))
                 .andExpect(status().isUnprocessableEntity());

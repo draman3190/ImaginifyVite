@@ -40,12 +40,12 @@ class StorageServiceTest {
     @Test
     void generatePresignedUploadUrl_returnsUrl() throws Exception {
         PresignedPutObjectRequest presignedRequest = mock(PresignedPutObjectRequest.class);
-        when(presignedRequest.url()).thenReturn(new URL("https://s3.amazonaws.com/test-bucket/epubs/abc.epub"));
+        when(presignedRequest.url()).thenReturn(new URL("https://s3.amazonaws.com/test-bucket/books/abc.txt"));
         when(s3Presigner.presignPutObject(any(PutObjectPresignRequest.class))).thenReturn(presignedRequest);
 
-        String url = storageService.generatePresignedUploadUrl("epubs/abc.epub", "application/epub+zip");
+        String url = storageService.generatePresignedUploadUrl("books/abc.txt", "text/plain; charset=utf-8");
 
-        assertEquals("https://s3.amazonaws.com/test-bucket/epubs/abc.epub", url);
+        assertEquals("https://s3.amazonaws.com/test-bucket/books/abc.txt", url);
         ArgumentCaptor<PutObjectPresignRequest> captor = ArgumentCaptor.forClass(PutObjectPresignRequest.class);
         verify(s3Presigner).presignPutObject(captor.capture());
         assertEquals(15, captor.getValue().signatureDuration().toMinutes());
@@ -54,12 +54,12 @@ class StorageServiceTest {
     @Test
     void generatePresignedDownloadUrl_returnsUrl() throws Exception {
         PresignedGetObjectRequest presignedRequest = mock(PresignedGetObjectRequest.class);
-        when(presignedRequest.url()).thenReturn(new URL("https://s3.amazonaws.com/test-bucket/epubs/abc.epub"));
+        when(presignedRequest.url()).thenReturn(new URL("https://s3.amazonaws.com/test-bucket/books/abc.txt"));
         when(s3Presigner.presignGetObject(any(GetObjectPresignRequest.class))).thenReturn(presignedRequest);
 
-        String url = storageService.generatePresignedDownloadUrl("epubs/abc.epub");
+        String url = storageService.generatePresignedDownloadUrl("books/abc.txt");
 
-        assertEquals("https://s3.amazonaws.com/test-bucket/epubs/abc.epub", url);
+        assertEquals("https://s3.amazonaws.com/test-bucket/books/abc.txt", url);
         verify(s3Presigner).presignGetObject(any(GetObjectPresignRequest.class));
     }
 
@@ -68,7 +68,7 @@ class StorageServiceTest {
         when(s3Client.headObject(any(HeadObjectRequest.class)))
                 .thenReturn(software.amazon.awssdk.services.s3.model.HeadObjectResponse.builder().build());
 
-        assertTrue(storageService.objectExists("epubs/abc.epub"));
+        assertTrue(storageService.objectExists("books/abc.txt"));
     }
 
     @Test
@@ -76,7 +76,7 @@ class StorageServiceTest {
         when(s3Client.headObject(any(HeadObjectRequest.class)))
                 .thenThrow(NoSuchKeyException.builder().message("Not found").build());
 
-        assertFalse(storageService.objectExists("epubs/abc.epub"));
+        assertFalse(storageService.objectExists("books/abc.txt"));
     }
 
     @Test
