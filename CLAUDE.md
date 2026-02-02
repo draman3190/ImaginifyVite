@@ -14,13 +14,14 @@ All commands run from `backend/`:
 
 ```bash
 cd backend
-./gradlew build          # compile + test
-./gradlew bootRun        # run on port 8080
-./gradlew test           # run all tests (JUnit 5)
+./gradlew build              # compile + test
+./gradlew bootRun            # run on port 8080
+./gradlew test               # run all tests (JUnit 5)
 ./gradlew test --tests "com.imaginify.ImaginifyApplicationTests"  # run single test class
 ./gradlew test --tests "*.ImaginifyApplicationTests.contextLoads" # run single test method
-./gradlew bootJar        # build executable JAR
-./gradlew clean          # clean build artifacts
+./gradlew bootJar            # build executable JAR
+./gradlew packageEventHandler # build event handler ZIP (build/event-handler/event-handler.zip)
+./gradlew clean              # clean build artifacts
 ```
 
 - Java 21 required
@@ -69,6 +70,7 @@ Not yet set up. `frontend/` directory is empty. Planned as a React app.
 controller/          REST endpoints (ImageGenerationController, LibraryController)
 service/             Business logic orchestration
   client/            AI provider interface + implementations (Gemini, Grok)
+handler/             Lambda event handlers (BookUploadEventHandler)
 repository/          DynamoDB data access (BookRepository)
 config/              AWS SDK bean configuration (AwsConfig, DynamoDbConfig)
 model/               Domain entities with DynamoDB annotations (Book, Chapter, ImageMetadata)
@@ -110,16 +112,32 @@ Single parameterized stack class instantiated per stage (beta, gamma, prod). Eac
 - **Lambda Alias** — `live` alias pointing to current published version (required for SnapStart)
 - **HTTP API Gateway** — `imaginify-api-{stage}`, catch-all `/{proxy+}` route to Lambda, CORS enabled
 - **CloudWatch Log Group** — `/aws/lambda/imaginify-backend-{stage}`, 1-week retention (beta/gamma), 6-month retention (prod)
+- **Event Handler Lambda** — `imaginify-event-handler-{stage}`, Java 21 runtime, plain Lambda handler (no Web Adapter), triggered by S3 PutObject events on `books/*.txt`
+- **Event Handler IAM Role** — `imaginify-event-handler-role-{stage}`, least-privilege: DynamoDB GetItem/PutItem, S3 GetObject on `books/*`, CloudWatch Logs
+- **Event Handler Log Group** — `/aws/lambda/imaginify-event-handler-{stage}`, same retention as backend
 
 Stage differences:
 - prod uses `RETAIN` removal policy; beta and gamma use `DESTROY` with `autoDeleteObjects` enabled on S3
 - Lambda memory: beta 1024MB, gamma 1536MB, prod 2048MB
 - Reserved concurrency: beta 5, gamma 10, prod unlimited
 
+### Book Upload Event Processing
+
+When a `.txt` file is uploaded to the `books/` prefix in S3, an event notification triggers `BookUploadEventHandler` — a lightweight Lambda (plain Java, no Spring Boot). It downloads the file, parses metadata and chapters via `TextParsingService`, and updates the DynamoDB book record. This eliminates the need for clients to call `POST /confirm-upload` (kept as manual fallback).
+
+```
+S3 PutObject (books/*.txt) → Event Notification → BookUploadEventHandler Lambda → DynamoDB
+```
+
+- **Idempotency**: Uses DynamoDB conditional PutItem (`processingStatus = PENDING_UPLOAD`) for atomic claim. Duplicate S3 events are safely skipped.
+- **Error handling**: On failure, sets `processingStatus = FAILED` and logs the error. Does not rethrow to avoid infinite Lambda retries.
+- **Packaging**: Separate lean ZIP (`build/event-handler/event-handler.zip`) with only AWS SDK + Lambda runtime deps — no Spring JARs.
+
 ### Deployment Architecture
 
 ```
 Client → HTTP API Gateway → Lambda (Web Adapter Layer + Spring Boot JAR) → DynamoDB/S3/SecretsManager
+S3 PutObject (books/*.txt) → Event Handler Lambda (plain Java) → DynamoDB
 ```
 
 The backend runs in Lambda using the [AWS Lambda Web Adapter](https://github.com/awslabs/aws-lambda-web-adapter). This is a Lambda Layer that runs the Spring Boot app inside Lambda and proxies API Gateway HTTP requests to it. **Zero changes to backend Java code are needed** — `./gradlew bootRun` for local development continues to work unchanged.
@@ -143,7 +161,7 @@ npm run deploy:gamma   # builds JAR + deploys gamma stack
 npm run deploy:prod    # builds JAR + deploys prod stack
 ```
 
-To build the backend JAR independently: `npm run build:backend` (from `infrastructure/`).
+To build the backend JAR and event handler ZIP independently: `npm run build:backend` (from `infrastructure/`).
 
 ### Data Layer
 
