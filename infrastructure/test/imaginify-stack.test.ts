@@ -199,9 +199,9 @@ describe('ImaginifyStack', () => {
     betaTemplate.resourceCountIs('AWS::S3::Bucket', 1);
     betaTemplate.resourceCountIs('AWS::SecretsManager::Secret', 1);
     betaTemplate.resourceCountIs('AWS::KMS::Key', 1);
-    betaTemplate.resourceCountIs('AWS::Lambda::Function', 2); // backend + S3 auto-delete custom resource
+    betaTemplate.resourceCountIs('AWS::Lambda::Function', 4); // backend + S3 auto-delete custom resource + event handler + S3 notifications handler
     betaTemplate.resourceCountIs('AWS::ApiGatewayV2::Api', 1);
-    betaTemplate.resourceCountIs('AWS::Logs::LogGroup', 1);
+    betaTemplate.resourceCountIs('AWS::Logs::LogGroup', 2); // backend + event handler
     betaTemplate.resourceCountIs('AWS::Lambda::Alias', 1);
     betaTemplate.resourceCountIs('AWS::Lambda::Version', 1);
   });
@@ -288,6 +288,107 @@ describe('ImaginifyStack', () => {
     prodTemplate.hasResourceProperties('AWS::Lambda::Function', {
       FunctionName: 'imaginify-backend-prod',
       MemorySize: 2048,
+    });
+  });
+
+  // --- Event Handler tests ---
+
+  test('creates event handler Lambda with correct configuration', () => {
+    betaTemplate.hasResourceProperties('AWS::Lambda::Function', {
+      FunctionName: 'imaginify-event-handler-beta',
+      Runtime: 'java21',
+      Handler: 'com.imaginify.handler.BookUploadEventHandler::handleRequest',
+      MemorySize: 512,
+      Timeout: 60,
+      Environment: Match.objectLike({
+        Variables: Match.objectLike({
+          TABLE_NAME: Match.anyValue(),
+          BUCKET_NAME: Match.anyValue(),
+        }),
+      }),
+    });
+  });
+
+  test('event handler has dedicated IAM role', () => {
+    betaTemplate.hasResourceProperties('AWS::IAM::Role', {
+      RoleName: 'imaginify-event-handler-role-beta',
+      AssumeRolePolicyDocument: Match.objectLike({
+        Statement: Match.arrayWith([
+          Match.objectLike({
+            Effect: 'Allow',
+            Principal: { Service: 'lambda.amazonaws.com' },
+          }),
+        ]),
+      }),
+    });
+  });
+
+  test('event handler role has DynamoDB GetItem and PutItem permissions', () => {
+    betaTemplate.hasResourceProperties('AWS::IAM::Policy', {
+      PolicyDocument: Match.objectLike({
+        Statement: Match.arrayWith([
+          Match.objectLike({
+            Effect: 'Allow',
+            Action: [
+              'dynamodb:GetItem',
+              'dynamodb:PutItem',
+            ],
+          }),
+        ]),
+      }),
+    });
+  });
+
+  test('event handler role has S3 GetObject permission scoped to books prefix', () => {
+    betaTemplate.hasResourceProperties('AWS::IAM::Policy', {
+      PolicyDocument: Match.objectLike({
+        Statement: Match.arrayWith([
+          Match.objectLike({
+            Effect: 'Allow',
+            Action: 's3:GetObject',
+          }),
+        ]),
+      }),
+    });
+  });
+
+  test('event handler CloudWatch log group exists', () => {
+    betaTemplate.hasResourceProperties('AWS::Logs::LogGroup', {
+      LogGroupName: '/aws/lambda/imaginify-event-handler-beta',
+      RetentionInDays: 7,
+    });
+  });
+
+  test('S3 bucket has notification configuration', () => {
+    betaTemplate.hasResourceProperties('Custom::S3BucketNotifications', {
+      NotificationConfiguration: Match.objectLike({
+        LambdaFunctionConfigurations: Match.arrayWith([
+          Match.objectLike({
+            Events: ['s3:ObjectCreated:Put'],
+            Filter: Match.objectLike({
+              Key: Match.objectLike({
+                FilterRules: Match.arrayWith([
+                  Match.objectLike({ Name: 'prefix', Value: 'books/' }),
+                ]),
+              }),
+            }),
+          }),
+        ]),
+      }),
+    });
+  });
+
+  test('prod event handler has higher memory', () => {
+    prodTemplate.hasResourceProperties('AWS::Lambda::Function', {
+      FunctionName: 'imaginify-event-handler-prod',
+      MemorySize: 1024,
+    });
+  });
+
+  test('prod event handler log group has 6-month retention', () => {
+    prodTemplate.hasResourceProperties('AWS::Logs::LogGroup', {
+      LogGroupName: '/aws/lambda/imaginify-event-handler-prod',
+      RetentionInDays: 180,
     });
   });
 

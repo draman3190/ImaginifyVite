@@ -9,6 +9,8 @@ export interface StageConfig {
   readonly lambdaMemoryMb: number;
   readonly lambdaTimeoutSeconds: number;
   readonly lambdaReservedConcurrency?: number;
+  readonly eventHandlerMemoryMb: number;
+  readonly eventHandlerTimeoutSeconds: number;
 }
 
 const ACCOUNT = '115417277634';
@@ -23,6 +25,8 @@ export const STAGE_CONFIGS: Record<string, StageConfig> = {
     autoDeleteObjects: true,
     lambdaMemoryMb: 1024,
     lambdaTimeoutSeconds: 30,
+    eventHandlerMemoryMb: 512,
+    eventHandlerTimeoutSeconds: 60,
   },
   gamma: {
     stageName: 'gamma',
@@ -33,6 +37,8 @@ export const STAGE_CONFIGS: Record<string, StageConfig> = {
     lambdaMemoryMb: 1536,
     lambdaTimeoutSeconds: 30,
     lambdaReservedConcurrency: 10,
+    eventHandlerMemoryMb: 768,
+    eventHandlerTimeoutSeconds: 60,
   },
   prod: {
     stageName: 'prod',
@@ -42,5 +48,7 @@ export const STAGE_CONFIGS: Record<string, StageConfig> = {
     autoDeleteObjects: false,
     lambdaMemoryMb: 2048,
     lambdaTimeoutSeconds: 30,
+    eventHandlerMemoryMb: 1024,
+    eventHandlerTimeoutSeconds: 60,
   },
 };

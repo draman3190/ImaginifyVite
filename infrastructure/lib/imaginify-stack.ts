@@ -1,6 +1,7 @@
 import * as cdk from 'aws-cdk-lib';
 import * as dynamodb from 'aws-cdk-lib/aws-dynamodb';
 import * as s3 from 'aws-cdk-lib/aws-s3';
+import * as s3n from 'aws-cdk-lib/aws-s3-notifications';
 import * as secretsmanager from 'aws-cdk-lib/aws-secretsmanager';
 import * as kms from 'aws-cdk-lib/aws-kms';
 import * as iam from 'aws-cdk-lib/aws-iam';
@@ -24,6 +25,7 @@ export class ImaginifyStack extends cdk.Stack {
   public readonly backendRole: iam.Role;
   public readonly backendFunction: lambda.Function;
   public readonly httpApi: apigatewayv2.HttpApi;
+  public readonly eventHandlerFunction: lambda.Function;
 
   constructor(scope: Construct, id: string, props: ImaginifyStackProps) {
     super(scope, id, props);
@@ -214,6 +216,74 @@ export class ImaginifyStack extends cdk.Stack {
         liveAlias,
       ),
     });
+
+    // --- Book Upload Event Handler ---
+
+    // CloudWatch Log Group for event handler
+    const eventHandlerLogGroup = new logs.LogGroup(this, 'EventHandlerLogGroup', {
+      logGroupName: `/aws/lambda/imaginify-event-handler-${stage}`,
+      retention: stage === 'prod'
+        ? logs.RetentionDays.SIX_MONTHS
+        : logs.RetentionDays.ONE_WEEK,
+      removalPolicy: stageConfig.removalPolicy,
+    });
+
+    // Dedicated IAM Role for event handler (least-privilege)
+    const eventHandlerRole = new iam.Role(this, 'EventHandlerRole', {
+      roleName: `imaginify-event-handler-role-${stage}`,
+      assumedBy: new iam.ServicePrincipal('lambda.amazonaws.com'),
+    });
+
+    eventHandlerRole.addToPolicy(new iam.PolicyStatement({
+      effect: iam.Effect.ALLOW,
+      actions: [
+        'dynamodb:GetItem',
+        'dynamodb:PutItem',
+      ],
+      resources: [this.table.tableArn],
+    }));
+
+    eventHandlerRole.addToPolicy(new iam.PolicyStatement({
+      effect: iam.Effect.ALLOW,
+      actions: ['s3:GetObject'],
+      resources: [`${this.bucket.bucketArn}/books/*`],
+    }));
+
+    eventHandlerRole.addToPolicy(new iam.PolicyStatement({
+      effect: iam.Effect.ALLOW,
+      actions: [
+        'logs:CreateLogGroup',
+        'logs:CreateLogStream',
+        'logs:PutLogEvents',
+      ],
+      resources: [
+        eventHandlerLogGroup.logGroupArn,
+        `${eventHandlerLogGroup.logGroupArn}:*`,
+      ],
+    }));
+
+    // Event handler Lambda Function (plain Java, no Spring)
+    this.eventHandlerFunction = new lambda.Function(this, 'EventHandlerFunction', {
+      functionName: `imaginify-event-handler-${stage}`,
+      runtime: lambda.Runtime.JAVA_21,
+      handler: 'com.imaginify.handler.BookUploadEventHandler::handleRequest',
+      code: lambda.Code.fromAsset(path.join(__dirname, '../../backend/build/event-handler/event-handler.zip')),
+      memorySize: stageConfig.eventHandlerMemoryMb,
+      timeout: cdk.Duration.seconds(stageConfig.eventHandlerTimeoutSeconds),
+      role: eventHandlerRole,
+      environment: {
+        TABLE_NAME: this.table.tableName,
+        BUCKET_NAME: this.bucket.bucketName,
+      },
+      logGroup: eventHandlerLogGroup,
+    });
+
+    // S3 event notification: trigger event handler on book uploads
+    this.bucket.addEventNotification(
+      s3.EventType.OBJECT_CREATED_PUT,
+      new s3n.LambdaDestination(this.eventHandlerFunction),
+      { prefix: 'books/', suffix: '.txt' },
+    );
 
     // Output the API Gateway URL
     new cdk.CfnOutput(this, 'ApiUrl', {
