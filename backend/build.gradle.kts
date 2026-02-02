@@ -34,8 +34,27 @@ dependencies {
 
     implementation("com.fasterxml.jackson.datatype:jackson-datatype-jsr310")
 
+    implementation("com.amazonaws:aws-lambda-java-core:1.2.3")
+    implementation("com.amazonaws:aws-lambda-java-events:3.14.0")
+
     testImplementation("org.springframework.boot:spring-boot-starter-test")
     testRuntimeOnly("org.junit.platform:junit-platform-launcher")
+}
+
+// Lean dependency set for event handler ZIP (no Spring, no Secrets Manager)
+val eventHandlerDeps by configurations.creating {
+    isCanBeResolved = true
+    isCanBeConsumed = false
+}
+
+dependencies {
+    eventHandlerDeps("com.amazonaws:aws-lambda-java-core:1.2.3")
+    eventHandlerDeps("com.amazonaws:aws-lambda-java-events:3.14.0")
+    eventHandlerDeps(platform("software.amazon.awssdk:bom:2.29.45"))
+    eventHandlerDeps("software.amazon.awssdk:dynamodb-enhanced")
+    eventHandlerDeps("software.amazon.awssdk:s3")
+    eventHandlerDeps("software.amazon.awssdk:url-connection-client")
+    eventHandlerDeps("org.slf4j:slf4j-simple:2.0.16")
 }
 
 tasks.withType<Test> {
@@ -55,4 +74,12 @@ tasks.register<Copy>("packageLambda") {
     from(tasks.named("bootJar"))
     from("src/main/lambda")
     into(layout.buildDirectory.dir("lambda"))
+}
+
+tasks.register<Zip>("packageEventHandler") {
+    dependsOn("classes")
+    archiveFileName.set("event-handler.zip")
+    destinationDirectory.set(layout.buildDirectory.dir("event-handler"))
+    from(sourceSets.main.get().output.classesDirs)
+    into("lib") { from(eventHandlerDeps) }
 }
