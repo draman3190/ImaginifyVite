@@ -167,7 +167,7 @@ class LibraryServiceTest {
         when(storageService.downloadFile("books/id-1.txt")).thenReturn(new byte[]{1, 2, 3});
 
         TextMetadata metadata = new TextMetadata(
-                "Parsed Title", List.of("Author Name"), "en", 5000,
+                "Parsed Title", List.of("Author Name"), List.of("Fantasy"), "en", 5000,
                 List.of(new TextChapter(1, "Chapter 1", 0, 5000)));
         when(textParsingService.parse(any())).thenReturn(metadata);
 

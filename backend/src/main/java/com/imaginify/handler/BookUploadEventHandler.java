@@ -136,6 +136,9 @@ public class BookUploadEventHandler implements RequestHandler<S3Event, String> {
             if (metadata.authors() != null && !metadata.authors().isEmpty()) {
                 book.setAuthors(metadata.authors());
             }
+            if (metadata.genre() != null && !metadata.genre().isEmpty()) {
+                book.setGenre(metadata.genre());
+            }
             book.setLanguage(metadata.language());
             book.setFileUrl("s3://" + key);
 

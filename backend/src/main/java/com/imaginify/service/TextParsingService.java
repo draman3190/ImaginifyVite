@@ -25,10 +25,13 @@ public class TextParsingService {
             "^(?:Author|By):\\s*(.+)$", Pattern.CASE_INSENSITIVE);
     private static final Pattern LANGUAGE_PATTERN = Pattern.compile(
             "^Language:\\s*(.+)$", Pattern.CASE_INSENSITIVE);
+    private static final Pattern GENRE_PATTERN = Pattern.compile(
+            "^Genre:\\s*(.+)$", Pattern.CASE_INSENSITIVE);
 
     // Matches lines like "Chapter 1", "Chapter 1: Title", "CHAPTER ONE", "Chapter IV", "CHAPTER IV: Title"
+    // Also matches decorated formats like "--- CHAPTER 1: Title ---" or "*** Chapter 1 ***"
     static final Pattern CHAPTER_PATTERN = Pattern.compile(
-            "^\\s*(?i:chapter)\\s+([\\dIVXLCDMivxlcdm]+)(?:\\s*[:\\-—.]+\\s*(.+))?\\s*$");
+            "^[\\s\\-*=~#]*(?i:chapter)\\s+([\\dIVXLCDMivxlcdm]+)(?:\\s*[:\\-—.]+\\s*(.+?))?[\\s\\-*=~#]*$");
 
     // Number-word patterns for chapter detection
     private static final Pattern CHAPTER_WORD_NUMBER_PATTERN = Pattern.compile(
@@ -46,6 +49,7 @@ public class TextParsingService {
 
             String title = null;
             List<String> authors = new ArrayList<>();
+            List<String> genre = new ArrayList<>();
             String language = null;
 
             int scanLimit = Math.min(lines.length, METADATA_SCAN_LINES);
@@ -61,6 +65,16 @@ public class TextParsingService {
                 Matcher authorMatcher = AUTHOR_PATTERN.matcher(line);
                 if (authorMatcher.matches()) {
                     authors.add(authorMatcher.group(1).trim());
+                    continue;
+                }
+
+                Matcher genreMatcher = GENRE_PATTERN.matcher(line);
+                if (genreMatcher.matches()) {
+                    // Genre can be comma-separated: "Fantasy, Adventure"
+                    String genreValue = genreMatcher.group(1).trim();
+                    for (String g : genreValue.split(",")) {
+                        genre.add(g.trim());
+                    }
                     continue;
                 }
 
@@ -82,9 +96,9 @@ public class TextParsingService {
 
             List<TextChapter> chapters = detectChapters(text, lines);
 
-            log.info("Parsed text file: title={}, authors={}, chapters={}, length={}",
-                    title, authors, chapters.size(), text.length());
-            return new TextMetadata(title, authors, language, text.length(), chapters);
+            log.info("Parsed text file: title={}, authors={}, genre={}, chapters={}, length={}",
+                    title, authors, genre, chapters.size(), text.length());
+            return new TextMetadata(title, authors, genre, language, text.length(), chapters);
         } catch (BookProcessingException e) {
             throw e;
         } catch (Exception e) {
