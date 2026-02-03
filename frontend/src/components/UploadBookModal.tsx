@@ -44,10 +44,7 @@ export function UploadBookModal({ onClose, onUploadComplete }: UploadBookModalPr
 
         {state === 'select' && (
           <>
-            <div
-              className="dropzone-enchanted mb-4 flex cursor-pointer flex-col items-center rounded-lg p-8"
-              onClick={() => fileInputRef.current?.click()}
-            >
+            <label className="dropzone-enchanted mb-4 flex cursor-pointer flex-col items-center rounded-lg p-8">
               <svg
                 className="mb-2 h-10 w-10 text-text-muted"
                 fill="none"
@@ -73,7 +70,7 @@ export function UploadBookModal({ onClose, onUploadComplete }: UploadBookModalPr
                 className="hidden"
                 onChange={(e) => setSelectedFile(e.target.files?.[0] || null)}
               />
-            </div>
+            </label>
             <div className="flex justify-end gap-3">
               <button
                 onClick={onClose}
