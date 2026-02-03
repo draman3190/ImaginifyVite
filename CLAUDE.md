@@ -58,11 +58,54 @@ npx cdk list             # list all stacks
 - **First-time setup**: CDK bootstrap is required before first deploy: `npx cdk bootstrap aws://115417277634/us-east-1`
 - AWS credentials must be configured (`aws configure`) before deploy
 
-### Frontend
+### Frontend (React + Vite + TypeScript)
 
-Not yet set up. `frontend/` directory is empty. Planned as a React app.
+All commands run from `frontend/`:
+
+```bash
+cd frontend
+npm install              # install dependencies
+npm run dev              # start dev server on port 5173
+npm run build            # production build to dist/
+npm run preview          # preview production build locally
+```
+
+- Vite 7.x, React 19, TypeScript 5.x, Tailwind CSS v4
+- Tailwind configured via `@tailwindcss/vite` plugin (no `tailwind.config.js` needed)
+- Environment variables in `.env.development` (`VITE_API_BASE_URL`)
+- **Local development**: Vite dev server proxies `/library` and `/images` to `http://localhost:8080` (avoids CORS issues). Run the backend with beta stage args alongside the frontend:
+  ```bash
+  # Terminal 1
+  cd backend && ./gradlew bootRun --args='--aws.dynamodb.table-name=imaginify-books-beta --aws.s3.bucket-name=imaginify-images-beta-115417277634 --aws.secrets-manager.api-key-secret-id=imaginify/api-keys-beta'
+  # Terminal 2
+  cd frontend && npm run dev
+  ```
 
 ## Architecture
+
+### Frontend Structure (`frontend/src/`)
+
+```
+api/
+  client.ts              Fetch wrapper with base URL, RFC 7807 error handling
+  libraryApi.ts          fetchBooks, deleteBook, initiateUpload, uploadFileToS3
+  imageApi.ts            generateImages (placeholder, not called from UI yet)
+types/
+  book.ts                BookSummary, PresignedUploadUrlResponse, GenerateImagesResponse
+components/
+  BookLibrary.tsx        Main page: header, responsive grid, loading/error/empty states
+  BookCard.tsx           Book card with metadata, status badge, Download/Delete buttons
+  UploadBookModal.tsx    File picker + two-step presigned URL upload flow
+  StatusBadge.tsx        Color-coded processing status pill
+  EmptyState.tsx         Shown when library is empty
+hooks/
+  useBooks.ts            Fetch, refresh, delete books with optimistic updates
+App.tsx                  Renders BookLibrary
+```
+
+- **Upload flow**: (1) `POST /library/books/upload-url?filename=X` gets presigned URL, (2) PUT file directly to S3. The S3 bucket has CORS configured to allow browser PUT requests.
+- **Download Images button**: Present but disabled ("Coming soon") — backend image generation pipeline is not yet implemented.
+- **API fields**: Backend may return `null` for `authors` and `genre` arrays; frontend handles this with null coalescing.
 
 ### Backend Package Structure (`com.imaginify`)
 
@@ -105,7 +148,7 @@ Single parameterized stack class instantiated per stage (beta, gamma, prod). Eac
 
 - **KMS Key** — encrypts Secrets Manager secrets, auto-rotation enabled, alias `alias/imaginify-secrets-{stage}`
 - **DynamoDB Table** — `imaginify-books-{stage}`, partition key `bookId` (String), on-demand billing, PITR enabled
-- **S3 Bucket** — `imaginify-images-{stage}-115417277634`, SSE-S3, all public access blocked, SSL enforced
+- **S3 Bucket** — `imaginify-images-{stage}-115417277634`, SSE-S3, all public access blocked, SSL enforced, CORS enabled for PUT (browser-based presigned URL uploads)
 - **Secrets Manager Secret** — `imaginify/api-keys-{stage}`, KMS-encrypted, placeholder values (real keys set manually post-deploy)
 - **IAM Role** — `imaginify-backend-role-{stage}`, assumable by Lambda + EC2, least-privilege policies scoped to specific resource ARNs
 - **Lambda Function** — `imaginify-backend-{stage}`, Java 21 runtime, Spring Boot via AWS Lambda Web Adapter layer, SnapStart enabled
@@ -180,7 +223,7 @@ To build the backend JAR and event handler ZIP independently: `npm run build:bac
 
 Commit message format: `[Category] Descriptive message`
 
-Categories used: `[Backend]`, `[Infrastructure]`, `[Documentation]`, `[Cleanup]`
+Categories used: `[Backend]`, `[Frontend]`, `[Infrastructure]`, `[Documentation]`, `[Cleanup]`
 
 ## Documentation
 
