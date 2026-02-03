@@ -22,6 +22,8 @@ public class Book {
     private String uploadTimestamp;
     private String processingStatus;
     private String description;
+    private String tone;           // Overall tone/mood of the book (e.g., "dark and suspenseful", "whimsical")
+    private String artStyle;       // Preferred art style for illustrations (e.g., "watercolor", "comic panel")
     private List<Chapter> chapters;
 
     @DynamoDbPartitionKey
@@ -128,6 +130,22 @@ public class Book {
 
     public void setDescription(String description) {
         this.description = description;
+    }
+
+    public String getTone() {
+        return tone;
+    }
+
+    public void setTone(String tone) {
+        this.tone = tone;
+    }
+
+    public String getArtStyle() {
+        return artStyle;
+    }
+
+    public void setArtStyle(String artStyle) {
+        this.artStyle = artStyle;
     }
 
     public List<Chapter> getChapters() {

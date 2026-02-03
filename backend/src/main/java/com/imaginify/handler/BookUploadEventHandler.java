@@ -26,6 +26,7 @@ import software.amazon.awssdk.services.s3.S3Client;
 import software.amazon.awssdk.services.s3.model.GetObjectRequest;
 import software.amazon.awssdk.services.s3.model.GetObjectResponse;
 
+import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
@@ -127,6 +128,7 @@ public class BookUploadEventHandler implements RequestHandler<S3Event, String> {
             byte[] fileBytes = responseBytes.asByteArray();
 
             TextMetadata metadata = textParsingService.parse(fileBytes);
+            String fullText = new String(fileBytes, StandardCharsets.UTF_8);
 
             if (metadata.title() != null) {
                 book.setTitle(metadata.title());
@@ -144,6 +146,12 @@ public class BookUploadEventHandler implements RequestHandler<S3Event, String> {
                 chapter.setTitle(tc.title());
                 chapter.setStartOffset(tc.startOffset());
                 chapter.setTextLength(tc.textLength());
+
+                // Extract and store the full chapter text for image generation prompts
+                int endOffset = Math.min(tc.startOffset() + tc.textLength(), fullText.length());
+                String chapterText = fullText.substring(tc.startOffset(), endOffset);
+                chapter.setText(chapterText);
+
                 chapters.add(chapter);
             }
             book.setChapters(chapters);

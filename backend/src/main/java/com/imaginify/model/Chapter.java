@@ -11,6 +11,8 @@ public class Chapter {
     private String title;
     private int startOffset;
     private int textLength;
+    private String text;           // Full chapter text for image generation prompts
+    private String summary;        // AI-generated summary of chapter content
     private List<ImageMetadata> images;
 
     public int getChapterNumber() {
@@ -43,6 +45,22 @@ public class Chapter {
 
     public void setTextLength(int textLength) {
         this.textLength = textLength;
+    }
+
+    public String getText() {
+        return text;
+    }
+
+    public void setText(String text) {
+        this.text = text;
+    }
+
+    public String getSummary() {
+        return summary;
+    }
+
+    public void setSummary(String summary) {
+        this.summary = summary;
     }
 
     public List<ImageMetadata> getImages() {
