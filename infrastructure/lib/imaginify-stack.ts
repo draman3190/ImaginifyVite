@@ -58,6 +58,13 @@ export class ImaginifyStack extends cdk.Stack {
       enforceSSL: true,
       removalPolicy: stageConfig.removalPolicy,
       autoDeleteObjects: stageConfig.autoDeleteObjects,
+      cors: [
+        {
+          allowedMethods: [s3.HttpMethods.PUT],
+          allowedOrigins: ['*'],
+          allowedHeaders: ['Content-Type'],
+        },
+      ],
     });
 
     // Secrets Manager Secret
