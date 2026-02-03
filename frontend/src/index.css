@@ -1,1 +1,316 @@
 @import "tailwindcss";
+
+/* ── Dark Fantasy Theme Tokens ── */
+@theme {
+  /* Surface palette — deep midnight blues */
+  --color-void: #0a0b10;
+  --color-abyss: #0e1018;
+  --color-deep: #131520;
+  --color-surface: #191c2a;
+  --color-elevated: #1f2337;
+  --color-raised: #282d44;
+
+  /* Forest greens */
+  --color-forest-300: #6ee7a0;
+  --color-forest-400: #4ade80;
+  --color-forest-500: #22c55e;
+  --color-forest-600: #16a34a;
+  --color-forest-700: #15803d;
+  --color-forest-800: #166534;
+  --color-forest-900: #14532d;
+  --color-forest-950: #052e16;
+
+  /* Cosmic purples */
+  --color-cosmic-300: #c4b5fd;
+  --color-cosmic-400: #a78bfa;
+  --color-cosmic-500: #8b5cf6;
+  --color-cosmic-600: #7c3aed;
+  --color-cosmic-700: #6d28d9;
+  --color-cosmic-800: #5b21b6;
+  --color-cosmic-900: #4c1d95;
+  --color-cosmic-950: #2e1065;
+
+  /* Ethereal gold/amber */
+  --color-ethereal-200: #fde68a;
+  --color-ethereal-300: #fcd34d;
+  --color-ethereal-400: #fbbf24;
+  --color-ethereal-500: #f59e0b;
+  --color-ethereal-600: #d97706;
+  --color-ethereal-700: #b45309;
+  --color-ethereal-800: #92400e;
+  --color-ethereal-900: #78350f;
+  --color-ethereal-950: #451a03;
+
+  /* Semantic text */
+  --color-text-primary: #e8e6f0;
+  --color-text-secondary: #9d9bb0;
+  --color-text-muted: #6b687e;
+
+  /* Borders */
+  --color-border-subtle: rgba(255, 255, 255, 0.06);
+  --color-border-default: rgba(255, 255, 255, 0.1);
+  --color-border-glow: rgba(251, 191, 36, 0.3);
+
+  /* Shadows */
+  --shadow-glow-gold: 0 0 20px rgba(251, 191, 36, 0.15);
+  --shadow-glow-cosmic: 0 0 20px rgba(139, 92, 246, 0.2);
+
+  /* Animation durations */
+  --animate-float: float 6s ease-in-out infinite;
+  --animate-pulse-glow: pulse-glow 2s ease-in-out infinite;
+  --animate-shimmer: shimmer 2s linear infinite;
+}
+
+/* ── Keyframes ── */
+@keyframes shimmer {
+  0% { background-position: -200% center; }
+  100% { background-position: 200% center; }
+}
+
+@keyframes float {
+  0%, 100% { transform: translateY(0); }
+  50% { transform: translateY(-8px); }
+}
+
+@keyframes pulse-glow {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.7; }
+}
+
+@keyframes starfield {
+  0% { background-position: 0 0, 40px 60px, 130px 270px; }
+  100% { background-position: 0 -600px, 40px -540px, 130px -330px; }
+}
+
+@keyframes border-glow {
+  0%, 100% { opacity: 0.5; }
+  50% { opacity: 1; }
+}
+
+@keyframes nebula-drift {
+  0%   { transform: translate(0, 0) scale(1); }
+  33%  { transform: translate(30px, -20px) scale(1.05); }
+  66%  { transform: translate(-20px, 15px) scale(0.97); }
+  100% { transform: translate(0, 0) scale(1); }
+}
+
+@keyframes nebula-drift-reverse {
+  0%   { transform: translate(0, 0) scale(1); }
+  33%  { transform: translate(-25px, 20px) scale(0.96); }
+  66%  { transform: translate(15px, -25px) scale(1.04); }
+  100% { transform: translate(0, 0) scale(1); }
+}
+
+/* ── Global Dark Styles ── */
+html {
+  background-color: var(--color-void);
+  color-scheme: dark;
+}
+
+::selection {
+  background-color: rgba(139, 92, 246, 0.3);
+  color: #e8e6f0;
+}
+
+/* Dark scrollbar */
+::-webkit-scrollbar {
+  width: 8px;
+}
+::-webkit-scrollbar-track {
+  background: var(--color-abyss);
+}
+::-webkit-scrollbar-thumb {
+  background: var(--color-raised);
+  border-radius: 4px;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: #353a56;
+}
+
+/* ── Custom Component Classes ── */
+
+/* Starfield background with nebula */
+.bg-starfield {
+  background-color: var(--color-void);
+  background-image:
+    /* Brighter star dots — denser spread across two tile sizes */
+    radial-gradient(1.2px 1.2px at 20% 30%, rgba(255, 255, 255, 0.5), transparent),
+    radial-gradient(1px 1px at 40% 70%, rgba(255, 255, 255, 0.4), transparent),
+    radial-gradient(1.5px 1.5px at 60% 15%, rgba(255, 255, 255, 0.45), transparent),
+    radial-gradient(1px 1px at 80% 50%, rgba(255, 255, 255, 0.35), transparent),
+    radial-gradient(1px 1px at 10% 85%, rgba(255, 255, 255, 0.4), transparent),
+    radial-gradient(1.5px 1.5px at 70% 90%, rgba(255, 255, 255, 0.35), transparent),
+    radial-gradient(1px 1px at 95% 40%, rgba(255, 255, 255, 0.3), transparent),
+    radial-gradient(1.2px 1.2px at 35% 10%, rgba(255, 255, 255, 0.38), transparent),
+    radial-gradient(1px 1px at 55% 55%, rgba(255, 255, 255, 0.32), transparent),
+    radial-gradient(1.3px 1.3px at 85% 75%, rgba(255, 255, 255, 0.36), transparent),
+    /* Tinted accent stars */
+    radial-gradient(1.5px 1.5px at 50% 45%, rgba(139, 92, 246, 0.35), transparent),
+    radial-gradient(1.5px 1.5px at 15% 60%, rgba(251, 191, 36, 0.25), transparent),
+    radial-gradient(1.2px 1.2px at 90% 10%, rgba(139, 92, 246, 0.2), transparent);
+  background-size: 200px 200px, 250px 250px, 180px 180px, 220px 220px, 300px 300px,
+                   200px 200px, 260px 260px, 190px 190px, 240px 240px, 210px 210px,
+                   280px 280px, 230px 230px, 170px 170px;
+  position: relative;
+  isolation: isolate;
+  overflow: hidden;
+}
+
+/* Warm amber/gold nebula cloud */
+.bg-starfield::before {
+  content: '';
+  position: fixed;
+  inset: -20%;
+  z-index: -2;
+  background:
+    radial-gradient(ellipse 800px 500px at 10% 85%, rgba(217, 119, 6, 0.18), transparent 70%),
+    radial-gradient(ellipse 600px 600px at 85% 15%, rgba(251, 191, 36, 0.12), transparent 70%),
+    radial-gradient(ellipse 500px 400px at 50% 50%, rgba(180, 83, 9, 0.08), transparent 70%),
+    radial-gradient(ellipse 400px 300px at 30% 40%, rgba(245, 158, 11, 0.06), transparent 70%);
+  animation: nebula-drift 45s ease-in-out infinite;
+  pointer-events: none;
+}
+
+/* Cool cosmic purple nebula cloud */
+.bg-starfield::after {
+  content: '';
+  position: fixed;
+  inset: -20%;
+  z-index: -1;
+  background:
+    radial-gradient(ellipse 700px 550px at 75% 70%, rgba(139, 92, 246, 0.15), transparent 70%),
+    radial-gradient(ellipse 550px 450px at 20% 25%, rgba(109, 40, 217, 0.12), transparent 70%),
+    radial-gradient(ellipse 450px 600px at 55% 10%, rgba(124, 58, 237, 0.08), transparent 70%),
+    radial-gradient(ellipse 600px 400px at 90% 50%, rgba(76, 29, 149, 0.06), transparent 70%);
+  animation: nebula-drift-reverse 55s ease-in-out infinite;
+  pointer-events: none;
+}
+
+/* Enchanted header with golden glow line */
+.bg-enchanted-header {
+  background: linear-gradient(180deg, var(--color-surface) 0%, var(--color-deep) 100%);
+  border-bottom: 1px solid var(--color-border-subtle);
+  position: relative;
+}
+.bg-enchanted-header::after {
+  content: '';
+  position: absolute;
+  bottom: -1px;
+  left: 0;
+  right: 0;
+  height: 1px;
+  background: linear-gradient(90deg, transparent, rgba(251, 191, 36, 0.4) 30%, rgba(139, 92, 246, 0.3) 70%, transparent);
+}
+
+/* Enchanted glass card */
+.card-enchanted {
+  background: linear-gradient(135deg, rgba(25, 28, 42, 0.8) 0%, rgba(31, 35, 55, 0.6) 100%);
+  border: 1px solid var(--color-border-subtle);
+  backdrop-filter: blur(8px);
+  transition: transform 0.3s ease, box-shadow 0.3s ease, border-color 0.3s ease;
+  position: relative;
+  overflow: hidden;
+}
+.card-enchanted::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 1px;
+  background: linear-gradient(90deg, transparent, rgba(251, 191, 36, 0) 50%, transparent);
+  transition: background 0.3s ease;
+}
+.card-enchanted:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.3), 0 0 20px rgba(251, 191, 36, 0.08);
+  border-color: var(--color-border-default);
+}
+.card-enchanted:hover::before {
+  background: linear-gradient(90deg, transparent, rgba(251, 191, 36, 0.4) 50%, transparent);
+}
+
+/* Ethereal gold button */
+.btn-ethereal {
+  background: linear-gradient(135deg, var(--color-ethereal-600) 0%, var(--color-ethereal-500) 50%, var(--color-ethereal-600) 100%);
+  color: white;
+  position: relative;
+  overflow: hidden;
+  transition: box-shadow 0.3s ease, transform 0.15s ease;
+}
+.btn-ethereal::after {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: -100%;
+  width: 100%;
+  height: 100%;
+  background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.15), transparent);
+  transition: left 0.5s ease;
+}
+.btn-ethereal:hover {
+  box-shadow: 0 0 20px rgba(251, 191, 36, 0.3), 0 0 40px rgba(251, 191, 36, 0.1);
+}
+.btn-ethereal:hover::after {
+  left: 100%;
+}
+.btn-ethereal:disabled {
+  background: var(--color-raised);
+  color: var(--color-text-muted);
+  box-shadow: none;
+  cursor: not-allowed;
+}
+.btn-ethereal:disabled::after {
+  display: none;
+}
+
+/* Modal fog overlay */
+.modal-fog {
+  background: radial-gradient(ellipse at center, rgba(10, 11, 16, 0.85) 0%, rgba(10, 11, 16, 0.95) 100%);
+  backdrop-filter: blur(4px);
+}
+
+/* Enchanted modal card */
+.modal-enchanted {
+  background: linear-gradient(180deg, var(--color-surface) 0%, var(--color-deep) 100%);
+  border: 1px solid var(--color-border-default);
+  position: relative;
+}
+.modal-enchanted::before {
+  content: '';
+  position: absolute;
+  inset: -1px;
+  border-radius: inherit;
+  padding: 1px;
+  background: linear-gradient(135deg, rgba(251, 191, 36, 0.3), transparent 40%, transparent 60%, rgba(139, 92, 246, 0.3));
+  mask: linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0);
+  mask-composite: exclude;
+  -webkit-mask: linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0);
+  -webkit-mask-composite: xor;
+  pointer-events: none;
+  animation: border-glow 3s ease-in-out infinite;
+}
+
+/* Forest green tag */
+.tag-forest {
+  background: rgba(34, 197, 94, 0.1);
+  color: var(--color-forest-400);
+  border: 1px solid rgba(34, 197, 94, 0.2);
+}
+
+/* Enchanted dropzone */
+.dropzone-enchanted {
+  border: 2px dashed var(--color-border-default);
+  background: rgba(19, 21, 32, 0.5);
+  transition: border-color 0.3s ease, box-shadow 0.3s ease;
+}
+.dropzone-enchanted:hover {
+  border-color: var(--color-border-glow);
+  box-shadow: inset 0 0 30px rgba(251, 191, 36, 0.05);
+}
+
+/* Enchanted spinner */
+.spinner-enchanted {
+  border-color: rgba(139, 92, 246, 0.2);
+  border-top-color: var(--color-ethereal-400);
+}
