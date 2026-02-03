@@ -106,6 +106,7 @@ export function UploadBookModal({ onClose, onUploadComplete }: UploadBookModalPr
             </svg>
             <p className="text-sm font-medium text-text-primary">Upload complete!</p>
             <p className="text-xs text-text-muted">Your book is being processed.</p>
+            <p className="mt-3 text-xs text-text-muted">Closing automatically...</p>
           </div>
         )}
 
