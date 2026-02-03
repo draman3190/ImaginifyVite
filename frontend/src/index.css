@@ -87,20 +87,6 @@
   50% { opacity: 1; }
 }
 
-@keyframes nebula-drift {
-  0%   { transform: translate(0, 0) scale(1); }
-  33%  { transform: translate(30px, -20px) scale(1.05); }
-  66%  { transform: translate(-20px, 15px) scale(0.97); }
-  100% { transform: translate(0, 0) scale(1); }
-}
-
-@keyframes nebula-drift-reverse {
-  0%   { transform: translate(0, 0) scale(1); }
-  33%  { transform: translate(-25px, 20px) scale(0.96); }
-  66%  { transform: translate(15px, -25px) scale(1.04); }
-  100% { transform: translate(0, 0) scale(1); }
-}
-
 /* ── Global Dark Styles ── */
 html {
   background-color: var(--color-void);
@@ -156,33 +142,31 @@ html {
   overflow: hidden;
 }
 
-/* Warm amber/gold nebula cloud */
+/* Warm amber/gold nebula cloud — static for performance */
 .bg-starfield::before {
   content: '';
   position: fixed;
-  inset: -20%;
+  inset: 0;
   z-index: -2;
   background:
     radial-gradient(ellipse 800px 500px at 10% 85%, rgba(217, 119, 6, 0.18), transparent 70%),
     radial-gradient(ellipse 600px 600px at 85% 15%, rgba(251, 191, 36, 0.12), transparent 70%),
     radial-gradient(ellipse 500px 400px at 50% 50%, rgba(180, 83, 9, 0.08), transparent 70%),
     radial-gradient(ellipse 400px 300px at 30% 40%, rgba(245, 158, 11, 0.06), transparent 70%);
-  animation: nebula-drift 45s ease-in-out infinite;
   pointer-events: none;
 }
 
-/* Cool cosmic purple nebula cloud */
+/* Cool cosmic purple nebula cloud — static for performance */
 .bg-starfield::after {
   content: '';
   position: fixed;
-  inset: -20%;
+  inset: 0;
   z-index: -1;
   background:
     radial-gradient(ellipse 700px 550px at 75% 70%, rgba(139, 92, 246, 0.15), transparent 70%),
     radial-gradient(ellipse 550px 450px at 20% 25%, rgba(109, 40, 217, 0.12), transparent 70%),
     radial-gradient(ellipse 450px 600px at 55% 10%, rgba(124, 58, 237, 0.08), transparent 70%),
     radial-gradient(ellipse 600px 400px at 90% 50%, rgba(76, 29, 149, 0.06), transparent 70%);
-  animation: nebula-drift-reverse 55s ease-in-out infinite;
   pointer-events: none;
 }
 
@@ -210,6 +194,7 @@ html {
   transition: transform 0.3s ease, box-shadow 0.3s ease, border-color 0.3s ease;
   position: relative;
   overflow: hidden;
+  cursor: default;
 }
 .card-enchanted::before {
   content: '';
@@ -237,6 +222,7 @@ html {
   position: relative;
   overflow: hidden;
   transition: box-shadow 0.3s ease, transform 0.15s ease;
+  cursor: pointer;
 }
 .btn-ethereal::after {
   content: '';
@@ -303,6 +289,7 @@ html {
   border: 2px dashed var(--color-border-default);
   background: rgba(19, 21, 32, 0.5);
   transition: border-color 0.3s ease, box-shadow 0.3s ease;
+  cursor: pointer;
 }
 .dropzone-enchanted:hover {
   border-color: var(--color-border-glow);

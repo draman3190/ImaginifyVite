@@ -48,7 +48,7 @@ export function BookCard({ book, onDelete }: BookCardProps) {
         </button>
         <button
           onClick={() => onDelete(book.bookId)}
-          className="rounded-lg border border-red-500/20 px-3 py-2 text-sm font-medium text-red-400 hover:bg-red-500/10 hover:border-red-500/30 transition-colors"
+          className="cursor-pointer rounded-lg border border-red-500/20 px-3 py-2 text-sm font-medium text-red-400 hover:bg-red-500/10 hover:border-red-500/30 transition-colors"
         >
           Delete
         </button>
