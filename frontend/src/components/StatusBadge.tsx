@@ -3,14 +3,14 @@ interface StatusBadgeProps {
 }
 
 const STATUS_STYLES: Record<string, string> = {
-  COMPLETED: 'bg-green-100 text-green-800',
-  PROCESSING: 'bg-yellow-100 text-yellow-800',
-  PENDING_UPLOAD: 'bg-blue-100 text-blue-800',
-  FAILED: 'bg-red-100 text-red-800',
+  COMPLETED: 'bg-green-500/15 text-green-400 border border-green-500/30',
+  PROCESSING: 'bg-amber-500/15 text-amber-400 border border-amber-500/30 animate-pulse-glow',
+  PENDING_UPLOAD: 'bg-cosmic-500/15 text-cosmic-400 border border-cosmic-500/30',
+  FAILED: 'bg-red-500/15 text-red-400 border border-red-500/30',
 };
 
 export function StatusBadge({ status }: StatusBadgeProps) {
-  const style = STATUS_STYLES[status] || 'bg-gray-100 text-gray-800';
+  const style = STATUS_STYLES[status] || 'bg-raised/50 text-text-muted border border-border-subtle';
   const label = status.replace(/_/g, ' ');
 
   return (

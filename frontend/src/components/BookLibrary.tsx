@@ -9,13 +9,15 @@ export function BookLibrary() {
   const [showUpload, setShowUpload] = useState(false);
 
   return (
-    <div className="min-h-screen bg-gray-50">
-      <header className="border-b border-gray-200 bg-white">
+    <div className="min-h-screen bg-starfield">
+      <header className="bg-enchanted-header">
         <div className="mx-auto flex max-w-6xl items-center justify-between px-4 py-4 sm:px-6">
-          <h1 className="text-2xl font-bold text-gray-900">Imaginify</h1>
+          <h1 className="bg-gradient-to-r from-ethereal-400 via-ethereal-300 to-cosmic-400 bg-clip-text text-2xl font-bold text-transparent">
+            Imaginify
+          </h1>
           <button
             onClick={() => setShowUpload(true)}
-            className="rounded-lg bg-indigo-600 px-4 py-2 text-sm font-medium text-white hover:bg-indigo-700"
+            className="btn-ethereal rounded-lg px-4 py-2 text-sm font-medium"
           >
             Upload Book
           </button>
@@ -25,16 +27,16 @@ export function BookLibrary() {
       <main className="mx-auto max-w-6xl px-4 py-8 sm:px-6">
         {loading && (
           <div className="flex justify-center py-20">
-            <div className="h-8 w-8 animate-spin rounded-full border-4 border-indigo-200 border-t-indigo-600" />
+            <div className="spinner-enchanted h-8 w-8 animate-spin rounded-full border-4" />
           </div>
         )}
 
         {error && !loading && (
           <div className="flex flex-col items-center py-20 text-center">
-            <p className="mb-4 text-sm text-red-600">{error}</p>
+            <p className="mb-4 text-sm text-red-400">{error}</p>
             <button
               onClick={refresh}
-              className="rounded-lg bg-indigo-600 px-4 py-2 text-sm font-medium text-white hover:bg-indigo-700"
+              className="btn-ethereal rounded-lg px-4 py-2 text-sm font-medium"
             >
               Retry
             </button>

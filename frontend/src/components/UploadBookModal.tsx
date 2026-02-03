@@ -35,21 +35,21 @@ export function UploadBookModal({ onClose, onUploadComplete }: UploadBookModalPr
   }
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50" onClick={onClose}>
+    <div className="modal-fog fixed inset-0 z-50 flex items-center justify-center" onClick={onClose}>
       <div
-        className="w-full max-w-md rounded-xl bg-white p-6 shadow-xl"
+        className="modal-enchanted w-full max-w-md rounded-xl p-6 shadow-xl"
         onClick={(e) => e.stopPropagation()}
       >
-        <h2 className="mb-4 text-xl font-semibold text-gray-900">Upload Book</h2>
+        <h2 className="mb-4 text-xl font-semibold text-text-primary">Upload Book</h2>
 
         {state === 'select' && (
           <>
             <div
-              className="mb-4 flex cursor-pointer flex-col items-center rounded-lg border-2 border-dashed border-gray-300 p-8 hover:border-indigo-400"
+              className="dropzone-enchanted mb-4 flex cursor-pointer flex-col items-center rounded-lg p-8"
               onClick={() => fileInputRef.current?.click()}
             >
               <svg
-                className="mb-2 h-10 w-10 text-gray-400"
+                className="mb-2 h-10 w-10 text-text-muted"
                 fill="none"
                 stroke="currentColor"
                 viewBox="0 0 24 24"
@@ -62,9 +62,9 @@ export function UploadBookModal({ onClose, onUploadComplete }: UploadBookModalPr
                 />
               </svg>
               {selectedFile ? (
-                <p className="text-sm font-medium text-gray-900">{selectedFile.name}</p>
+                <p className="text-sm font-medium text-ethereal-400">{selectedFile.name}</p>
               ) : (
-                <p className="text-sm text-gray-500">Click to select a .txt file</p>
+                <p className="text-sm text-text-muted">Click to select a .txt file</p>
               )}
               <input
                 ref={fileInputRef}
@@ -77,14 +77,14 @@ export function UploadBookModal({ onClose, onUploadComplete }: UploadBookModalPr
             <div className="flex justify-end gap-3">
               <button
                 onClick={onClose}
-                className="rounded-lg px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-100"
+                className="rounded-lg px-4 py-2 text-sm font-medium text-text-secondary hover:bg-raised/50 transition-colors"
               >
                 Cancel
               </button>
               <button
                 onClick={handleUpload}
                 disabled={!selectedFile}
-                className="rounded-lg bg-indigo-600 px-4 py-2 text-sm font-medium text-white hover:bg-indigo-700 disabled:bg-gray-300 disabled:cursor-not-allowed"
+                className="btn-ethereal rounded-lg px-4 py-2 text-sm font-medium"
               >
                 Upload
               </button>
@@ -94,38 +94,38 @@ export function UploadBookModal({ onClose, onUploadComplete }: UploadBookModalPr
 
         {state === 'uploading' && (
           <div className="flex flex-col items-center py-8">
-            <div className="mb-4 h-8 w-8 animate-spin rounded-full border-4 border-indigo-200 border-t-indigo-600" />
-            <p className="text-sm text-gray-600">Uploading {selectedFile?.name}...</p>
+            <div className="spinner-enchanted mb-4 h-8 w-8 animate-spin rounded-full border-4" />
+            <p className="text-sm text-text-secondary">Uploading {selectedFile?.name}...</p>
           </div>
         )}
 
         {state === 'success' && (
           <div className="flex flex-col items-center py-8">
-            <svg className="mb-4 h-12 w-12 text-green-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <svg className="mb-4 h-12 w-12 text-forest-400 drop-shadow-[0_0_8px_rgba(34,197,94,0.4)]" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
             </svg>
-            <p className="text-sm font-medium text-gray-900">Upload complete!</p>
-            <p className="text-xs text-gray-500">Your book is being processed.</p>
+            <p className="text-sm font-medium text-text-primary">Upload complete!</p>
+            <p className="text-xs text-text-muted">Your book is being processed.</p>
           </div>
         )}
 
         {state === 'error' && (
           <div className="flex flex-col items-center py-8">
-            <svg className="mb-4 h-12 w-12 text-red-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <svg className="mb-4 h-12 w-12 text-red-400 drop-shadow-[0_0_8px_rgba(239,68,68,0.4)]" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
             </svg>
-            <p className="mb-1 text-sm font-medium text-red-700">Upload failed</p>
-            <p className="mb-4 text-xs text-gray-500">{error}</p>
+            <p className="mb-1 text-sm font-medium text-red-400">Upload failed</p>
+            <p className="mb-4 text-xs text-text-muted">{error}</p>
             <div className="flex gap-3">
               <button
                 onClick={onClose}
-                className="rounded-lg px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-100"
+                className="rounded-lg px-4 py-2 text-sm font-medium text-text-secondary hover:bg-raised/50 transition-colors"
               >
                 Cancel
               </button>
               <button
                 onClick={handleUpload}
-                className="rounded-lg bg-indigo-600 px-4 py-2 text-sm font-medium text-white hover:bg-indigo-700"
+                className="btn-ethereal rounded-lg px-4 py-2 text-sm font-medium"
               >
                 Retry
               </button>
