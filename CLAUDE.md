@@ -8,6 +8,21 @@ Imaginify is an AI-enhanced e-book reader that generates illustrations to accomp
 
 ## Build & Run Commands
 
+### Local Development (Recommended)
+
+Run from project root to start both backend and frontend together:
+
+```bash
+./dev.sh          # uses beta stage (default)
+./dev.sh gamma    # uses gamma stage
+```
+
+This script:
+- Starts the backend with the specified stage's AWS resources
+- Waits for the backend to be healthy
+- Starts the frontend dev server
+- Cleans up both on Ctrl+C
+
 ### Backend (Spring Boot + Gradle)
 
 All commands run from `backend/`:
@@ -73,13 +88,7 @@ npm run preview          # preview production build locally
 - Vite 7.x, React 19, TypeScript 5.x, Tailwind CSS v4
 - Tailwind configured via `@tailwindcss/vite` plugin (no `tailwind.config.js` needed)
 - Environment variables in `.env.development` (`VITE_API_BASE_URL`)
-- **Local development**: Vite dev server proxies `/library` and `/images` to `http://localhost:8080` (avoids CORS issues). Run the backend with beta stage args alongside the frontend:
-  ```bash
-  # Terminal 1
-  cd backend && ./gradlew bootRun --args='--aws.dynamodb.table-name=imaginify-books-beta --aws.s3.bucket-name=imaginify-images-beta-115417277634 --aws.secrets-manager.api-key-secret-id=imaginify/api-keys-beta'
-  # Terminal 2
-  cd frontend && npm run dev
-  ```
+- **Local development**: Vite dev server proxies `/library` and `/images` to `http://localhost:8080` (avoids CORS issues). Use `./dev.sh` from project root to start both servers together.
 
 ## Architecture
 
