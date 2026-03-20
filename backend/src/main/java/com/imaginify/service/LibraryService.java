@@ -28,7 +28,6 @@ public class LibraryService {
     private static final Logger log = LoggerFactory.getLogger(LibraryService.class);
     private static final String BOOK_KEY_PREFIX = "books/";
     private static final String BOOK_CONTENT_TYPE = "text/plain; charset=utf-8";
-    private static final int MAX_CHAPTER_TEXT_LENGTH = 10 * 1024; // 10KB per chapter
 
     private final BookRepository bookRepository;
     private final StorageService storageService;
@@ -154,13 +153,11 @@ public class LibraryService {
                 int endOffset = Math.min(tc.startOffset() + tc.textLength(), fullText.length());
                 String chapterText = fullText.substring(tc.startOffset(), endOffset);
 
-                // Store truncated text (for image generation context)
-                String truncatedText = chapterText.length() > MAX_CHAPTER_TEXT_LENGTH
-                        ? chapterText.substring(0, MAX_CHAPTER_TEXT_LENGTH) + "..."
-                        : chapterText;
-                chapter.setText(truncatedText);
+                // Upload chapter text to S3 (not stored in DynamoDB due to 400KB limit)
+                String chapterTextKey = String.format("books/%s/chapters/%d.txt", bookId, tc.chapterNumber());
+                storageService.uploadText(chapterTextKey, chapterText);
 
-                // Generate chapter summary
+                // Generate chapter summary (stored in DynamoDB)
                 chapter.setSummary(chapterSummaryService.generateSummary(chapterText));
 
                 chapters.add(chapter);
@@ -191,6 +188,18 @@ public class LibraryService {
         String downloadUrl = storageService.generatePresignedDownloadUrl(s3Key);
         return new PresignedDownloadUrlResponse(bookId, downloadUrl,
                 storageService.getPresignedUrlExpirationMinutes());
+    }
+
+    /**
+     * Retrieve chapter text from S3.
+     * Chapter text is stored separately in S3 due to DynamoDB's 400KB item size limit.
+     */
+    public String getChapterText(String bookId, int chapterNumber) {
+        bookRepository.findById(bookId)
+                .orElseThrow(() -> new BookNotFoundException(bookId));
+
+        String chapterKey = String.format("books/%s/chapters/%d.txt", bookId, chapterNumber);
+        return storageService.downloadText(chapterKey);
     }
 
     private boolean matchesQuery(Book book, String query) {

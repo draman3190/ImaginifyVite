@@ -20,6 +20,9 @@ import software.amazon.awssdk.services.dynamodb.model.ConditionalCheckFailedExce
 import software.amazon.awssdk.services.s3.S3Client;
 import software.amazon.awssdk.services.s3.model.GetObjectRequest;
 import software.amazon.awssdk.services.s3.model.GetObjectResponse;
+import software.amazon.awssdk.services.s3.model.PutObjectRequest;
+import software.amazon.awssdk.services.s3.model.PutObjectResponse;
+import software.amazon.awssdk.core.sync.RequestBody;
 
 import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
@@ -91,10 +94,16 @@ class BookUploadEventHandlerTest {
         assertEquals("Chapter 1: The Beginning", savedBook.getChapters().get(0).getTitle());
         assertEquals("Chapter 2: The End", savedBook.getChapters().get(1).getTitle());
 
-        // Verify text and summary are populated
+        // Verify summary is populated (text is stored in S3, not in the chapter)
         Chapter chapter1 = savedBook.getChapters().get(0);
-        assertNotNull(chapter1.getText());
         assertNotNull(chapter1.getSummary());
+
+        // Verify chapter text was uploaded to S3
+        ArgumentCaptor<PutObjectRequest> putCaptor = ArgumentCaptor.forClass(PutObjectRequest.class);
+        verify(s3Client, times(2)).putObject(putCaptor.capture(), any(RequestBody.class));
+        List<PutObjectRequest> puts = putCaptor.getAllValues();
+        assertEquals("books/" + BOOK_ID + "/chapters/1.txt", puts.get(0).key());
+        assertEquals("books/" + BOOK_ID + "/chapters/2.txt", puts.get(1).key());
     }
 
     @Test
@@ -211,6 +220,9 @@ class BookUploadEventHandlerTest {
         ResponseBytes<GetObjectResponse> responseBytes = ResponseBytes.fromByteArray(
                 GetObjectResponse.builder().build(), bytes);
         when(s3Client.getObjectAsBytes(any(GetObjectRequest.class))).thenReturn(responseBytes);
+        // Mock S3 putObject for chapter text uploads
+        when(s3Client.putObject(any(PutObjectRequest.class), any(RequestBody.class)))
+                .thenReturn(PutObjectResponse.builder().build());
     }
 
     private S3Event createS3Event(String bucket, String key) {

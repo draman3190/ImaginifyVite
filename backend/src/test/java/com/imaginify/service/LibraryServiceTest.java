@@ -25,6 +25,7 @@ import java.util.Optional;
 import static org.junit.jupiter.api.Assertions.*;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyString;
+import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.*;
 
 @ExtendWith(MockitoExtension.class)
@@ -183,6 +184,8 @@ class LibraryServiceTest {
         assertEquals(1, result.chapters().size());
 
         verify(bookRepository, times(2)).save(any(Book.class));
+        // Verify chapter text was uploaded to S3
+        verify(storageService).uploadText(eq("books/id-1/chapters/1.txt"), anyString());
     }
 
     @Test
@@ -264,6 +267,25 @@ class LibraryServiceTest {
         assertEquals("2024-01-01T00:00:00Z", result.uploadTimestamp());
         assertEquals(ProcessingStatus.COMPLETED.name(), result.processingStatus());
         assertEquals("A great book", result.description());
+    }
+
+    @Test
+    void getChapterText_existingBook_returnsTextFromS3() {
+        Book book = createTestBook("id-1", "Book One");
+        when(bookRepository.findById("id-1")).thenReturn(Optional.of(book));
+        when(storageService.downloadText("books/id-1/chapters/3.txt"))
+                .thenReturn("This is chapter 3 content.");
+
+        String result = libraryService.getChapterText("id-1", 3);
+
+        assertEquals("This is chapter 3 content.", result);
+    }
+
+    @Test
+    void getChapterText_nonExistentBook_throwsException() {
+        when(bookRepository.findById("missing")).thenReturn(Optional.empty());
+
+        assertThrows(BookNotFoundException.class, () -> libraryService.getChapterText("missing", 1));
     }
 
     private Book createTestBook(String id, String title) {

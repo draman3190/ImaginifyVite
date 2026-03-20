@@ -339,13 +339,13 @@ describe('ImaginifyStack', () => {
     });
   });
 
-  test('event handler role has S3 GetObject permission scoped to books prefix', () => {
+  test('event handler role has S3 GetObject and PutObject permissions scoped to books prefix', () => {
     betaTemplate.hasResourceProperties('AWS::IAM::Policy', {
       PolicyDocument: Match.objectLike({
         Statement: Match.arrayWith([
           Match.objectLike({
             Effect: 'Allow',
-            Action: 's3:GetObject',
+            Action: ['s3:GetObject', 's3:PutObject'],
           }),
         ]),
       }),

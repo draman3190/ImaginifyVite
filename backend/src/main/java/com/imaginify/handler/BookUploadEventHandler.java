@@ -28,6 +28,8 @@ import software.amazon.awssdk.services.dynamodb.model.ConditionalCheckFailedExce
 import software.amazon.awssdk.services.s3.S3Client;
 import software.amazon.awssdk.services.s3.model.GetObjectRequest;
 import software.amazon.awssdk.services.s3.model.GetObjectResponse;
+import software.amazon.awssdk.services.s3.model.PutObjectRequest;
+import software.amazon.awssdk.core.sync.RequestBody;
 
 import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
@@ -41,9 +43,6 @@ public class BookUploadEventHandler implements RequestHandler<S3Event, String> {
     private static final Logger log = LoggerFactory.getLogger(BookUploadEventHandler.class);
     private static final Pattern BOOK_KEY_PATTERN = Pattern.compile(
             "^books/([0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})\\.txt$");
-
-    // Max chapter text size to store in DynamoDB (10KB ≈ 2000 words, enough for image generation context)
-    private static final int MAX_CHAPTER_TEXT_LENGTH = 10 * 1024;
 
     private final S3Client s3Client;
     private final DynamoDbTable<Book> bookTable;
@@ -169,11 +168,9 @@ public class BookUploadEventHandler implements RequestHandler<S3Event, String> {
                 int endOffset = Math.min(tc.startOffset() + tc.textLength(), fullText.length());
                 String chapterText = fullText.substring(tc.startOffset(), endOffset);
 
-                // Store truncated text (for image generation context) - limit to ~10KB per chapter
-                String truncatedText = chapterText.length() > MAX_CHAPTER_TEXT_LENGTH
-                        ? chapterText.substring(0, MAX_CHAPTER_TEXT_LENGTH) + "..."
-                        : chapterText;
-                chapter.setText(truncatedText);
+                // Upload chapter text to S3 (not stored in DynamoDB due to 400KB limit)
+                String chapterTextKey = String.format("books/%s/chapters/%d.txt", bookId, tc.chapterNumber());
+                uploadChapterText(eventBucket, chapterTextKey, chapterText);
 
                 // Generate chapter summary
                 String summary = chapterSummaryService.generateSummary(chapterText);
@@ -186,7 +183,7 @@ public class BookUploadEventHandler implements RequestHandler<S3Event, String> {
                 }
                 chapter.setSegments(segments);
                 log.info("Chapter {} '{}' - {} chars, {} segments, summary: {}",
-                        tc.chapterNumber(), tc.title(), truncatedText.length(), segments.size(),
+                        tc.chapterNumber(), tc.title(), chapterText.length(), segments.size(),
                         summary != null ? summary.substring(0, Math.min(50, summary.length())) + "..." : "null");
 
                 chapters.add(chapter);
@@ -201,5 +198,16 @@ public class BookUploadEventHandler implements RequestHandler<S3Event, String> {
             book.setProcessingStatus(ProcessingStatus.FAILED.name());
             bookTable.putItem(book);
         }
+    }
+
+    private void uploadChapterText(String bucket, String key, String text) {
+        log.info("Uploading chapter text to S3: bucket={}, key={}, length={}", bucket, key, text.length());
+        s3Client.putObject(
+                PutObjectRequest.builder()
+                        .bucket(bucket)
+                        .key(key)
+                        .contentType("text/plain; charset=utf-8")
+                        .build(),
+                RequestBody.fromString(text));
     }
 }

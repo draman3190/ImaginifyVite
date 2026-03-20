@@ -1,6 +1,7 @@
 package com.imaginify.model;
 
 import software.amazon.awssdk.enhanced.dynamodb.mapper.annotations.DynamoDbBean;
+import software.amazon.awssdk.enhanced.dynamodb.mapper.annotations.DynamoDbIgnore;
 
 import java.util.List;
 
@@ -11,7 +12,7 @@ public class Chapter {
     private String title;
     private int startOffset;
     private int textLength;
-    private String text;           // Full chapter text for image generation prompts
+    private String text;           // Chapter text stored in S3, not DynamoDB (use @DynamoDbIgnore)
     private String summary;        // AI-generated summary of chapter content
     private List<Segment> segments; // Reading segments (2-3 page chunks) with natural pause points
     private List<ImageMetadata> images; // Legacy: direct chapter images (prefer segment-level images)
@@ -48,6 +49,7 @@ public class Chapter {
         this.textLength = textLength;
     }
 
+    @DynamoDbIgnore
     public String getText() {
         return text;
     }

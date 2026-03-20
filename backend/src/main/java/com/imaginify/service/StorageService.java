@@ -49,6 +49,27 @@ public class StorageService {
         return "s3://" + bucketName + "/" + key;
     }
 
+    public void uploadText(String key, String text) {
+        log.info("Uploading text to S3: bucket={}, key={}, length={}", bucketName, key, text.length());
+        s3Client.putObject(
+                PutObjectRequest.builder()
+                        .bucket(bucketName)
+                        .key(key)
+                        .contentType("text/plain; charset=utf-8")
+                        .build(),
+                RequestBody.fromString(text));
+    }
+
+    public String downloadText(String key) {
+        log.info("Downloading text from S3: bucket={}, key={}", bucketName, key);
+        return s3Client.getObjectAsBytes(
+                GetObjectRequest.builder()
+                        .bucket(bucketName)
+                        .key(key)
+                        .build())
+                .asUtf8String();
+    }
+
     public byte[] downloadFile(String key) {
         log.info("Downloading file from S3: bucket={}, key={}", bucketName, key);
         return s3Client.getObjectAsBytes(
