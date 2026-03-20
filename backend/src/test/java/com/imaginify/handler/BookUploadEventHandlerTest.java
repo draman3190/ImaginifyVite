@@ -6,6 +6,7 @@ import com.amazonaws.services.lambda.runtime.events.models.s3.S3EventNotificatio
 import com.imaginify.model.Book;
 import com.imaginify.model.Chapter;
 import com.imaginify.model.ProcessingStatus;
+import com.imaginify.service.ChapterSummaryService;
 import com.imaginify.service.SegmentDetectionService;
 import com.imaginify.service.TextParsingService;
 import org.junit.jupiter.api.BeforeEach;
@@ -45,6 +46,7 @@ class BookUploadEventHandlerTest {
     private DynamoDbTable<Book> bookTable;
     private TextParsingService textParsingService;
     private SegmentDetectionService segmentDetectionService;
+    private ChapterSummaryService chapterSummaryService;
     private Context context;
     private BookUploadEventHandler handler;
 
@@ -54,8 +56,10 @@ class BookUploadEventHandlerTest {
         bookTable = mock(DynamoDbTable.class);
         textParsingService = new TextParsingService();
         segmentDetectionService = new SegmentDetectionService();
+        chapterSummaryService = new ChapterSummaryService();
         context = mock(Context.class);
-        handler = new BookUploadEventHandler(s3Client, bookTable, textParsingService, segmentDetectionService, BUCKET_NAME);
+        handler = new BookUploadEventHandler(s3Client, bookTable, textParsingService,
+                segmentDetectionService, chapterSummaryService, BUCKET_NAME);
     }
 
     @Test
@@ -86,6 +90,11 @@ class BookUploadEventHandlerTest {
         assertEquals(2, savedBook.getChapters().size());
         assertEquals("Chapter 1: The Beginning", savedBook.getChapters().get(0).getTitle());
         assertEquals("Chapter 2: The End", savedBook.getChapters().get(1).getTitle());
+
+        // Verify text and summary are populated
+        Chapter chapter1 = savedBook.getChapters().get(0);
+        assertNotNull(chapter1.getText());
+        assertNotNull(chapter1.getSummary());
     }
 
     @Test

@@ -39,11 +39,14 @@ class LibraryServiceTest {
     @Mock
     private TextParsingService textParsingService;
 
+    private ChapterSummaryService chapterSummaryService;
+
     private LibraryService libraryService;
 
     @BeforeEach
     void setUp() {
-        libraryService = new LibraryService(bookRepository, storageService, textParsingService);
+        chapterSummaryService = new ChapterSummaryService();
+        libraryService = new LibraryService(bookRepository, storageService, textParsingService, chapterSummaryService);
     }
 
     @Test

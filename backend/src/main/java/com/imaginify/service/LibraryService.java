@@ -28,16 +28,19 @@ public class LibraryService {
     private static final Logger log = LoggerFactory.getLogger(LibraryService.class);
     private static final String BOOK_KEY_PREFIX = "books/";
     private static final String BOOK_CONTENT_TYPE = "text/plain; charset=utf-8";
+    private static final int MAX_CHAPTER_TEXT_LENGTH = 10 * 1024; // 10KB per chapter
 
     private final BookRepository bookRepository;
     private final StorageService storageService;
     private final TextParsingService textParsingService;
+    private final ChapterSummaryService chapterSummaryService;
 
     public LibraryService(BookRepository bookRepository, StorageService storageService,
-                          TextParsingService textParsingService) {
+                          TextParsingService textParsingService, ChapterSummaryService chapterSummaryService) {
         this.bookRepository = bookRepository;
         this.storageService = storageService;
         this.textParsingService = textParsingService;
+        this.chapterSummaryService = chapterSummaryService;
     }
 
     public List<BookSummaryResponse> listBooks() {
@@ -126,6 +129,7 @@ public class LibraryService {
 
         try {
             byte[] fileBytes = storageService.downloadFile(s3Key);
+            String fullText = new String(fileBytes, java.nio.charset.StandardCharsets.UTF_8);
             TextMetadata metadata = textParsingService.parse(fileBytes);
 
             if (metadata.title() != null) {
@@ -145,13 +149,28 @@ public class LibraryService {
                 chapter.setTitle(tc.title());
                 chapter.setStartOffset(tc.startOffset());
                 chapter.setTextLength(tc.textLength());
+
+                // Extract chapter text
+                int endOffset = Math.min(tc.startOffset() + tc.textLength(), fullText.length());
+                String chapterText = fullText.substring(tc.startOffset(), endOffset);
+
+                // Store truncated text (for image generation context)
+                String truncatedText = chapterText.length() > MAX_CHAPTER_TEXT_LENGTH
+                        ? chapterText.substring(0, MAX_CHAPTER_TEXT_LENGTH) + "..."
+                        : chapterText;
+                chapter.setText(truncatedText);
+
+                // Generate chapter summary
+                chapter.setSummary(chapterSummaryService.generateSummary(chapterText));
+
                 chapters.add(chapter);
             }
             book.setChapters(chapters);
 
             book.setProcessingStatus(ProcessingStatus.COMPLETED.name());
             bookRepository.save(book);
-            log.info("Book processing completed: bookId={}, title={}", bookId, book.getTitle());
+            log.info("Book processing completed: bookId={}, title={}, chapters={}",
+                    bookId, book.getTitle(), chapters.size());
             return toResponse(book);
         } catch (BookProcessingException e) {
             book.setProcessingStatus(ProcessingStatus.FAILED.name());

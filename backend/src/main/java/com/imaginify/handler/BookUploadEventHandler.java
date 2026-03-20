@@ -10,6 +10,7 @@ import com.imaginify.model.ProcessingStatus;
 import com.imaginify.model.Segment;
 import com.imaginify.model.TextChapter;
 import com.imaginify.model.TextMetadata;
+import com.imaginify.service.ChapterSummaryService;
 import com.imaginify.service.SegmentDetectionService;
 import com.imaginify.service.TextParsingService;
 import org.slf4j.Logger;
@@ -41,10 +42,14 @@ public class BookUploadEventHandler implements RequestHandler<S3Event, String> {
     private static final Pattern BOOK_KEY_PATTERN = Pattern.compile(
             "^books/([0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})\\.txt$");
 
+    // Max chapter text size to store in DynamoDB (10KB ≈ 2000 words, enough for image generation context)
+    private static final int MAX_CHAPTER_TEXT_LENGTH = 10 * 1024;
+
     private final S3Client s3Client;
     private final DynamoDbTable<Book> bookTable;
     private final TextParsingService textParsingService;
     private final SegmentDetectionService segmentDetectionService;
+    private final ChapterSummaryService chapterSummaryService;
     private final String bucketName;
 
     public BookUploadEventHandler() {
@@ -64,16 +69,19 @@ public class BookUploadEventHandler implements RequestHandler<S3Event, String> {
         this.bookTable = enhancedClient.table(tableName, TableSchema.fromBean(Book.class));
         this.textParsingService = new TextParsingService();
         this.segmentDetectionService = new SegmentDetectionService();
+        this.chapterSummaryService = new ChapterSummaryService();
     }
 
     BookUploadEventHandler(S3Client s3Client, DynamoDbTable<Book> bookTable,
                            TextParsingService textParsingService,
                            SegmentDetectionService segmentDetectionService,
+                           ChapterSummaryService chapterSummaryService,
                            String bucketName) {
         this.s3Client = s3Client;
         this.bookTable = bookTable;
         this.textParsingService = textParsingService;
         this.segmentDetectionService = segmentDetectionService;
+        this.chapterSummaryService = chapterSummaryService;
         this.bucketName = bucketName;
     }
 
@@ -156,21 +164,30 @@ public class BookUploadEventHandler implements RequestHandler<S3Event, String> {
                 chapter.setTitle(tc.title());
                 chapter.setStartOffset(tc.startOffset());
                 chapter.setTextLength(tc.textLength());
-                // Note: chapter text is NOT stored in DynamoDB to avoid 400KB limit
-                // Text can be retrieved from S3 using fileUrl + offsets when needed
 
-                // Extract chapter text temporarily for segment detection
+                // Extract chapter text
                 int endOffset = Math.min(tc.startOffset() + tc.textLength(), fullText.length());
                 String chapterText = fullText.substring(tc.startOffset(), endOffset);
 
+                // Store truncated text (for image generation context) - limit to ~10KB per chapter
+                String truncatedText = chapterText.length() > MAX_CHAPTER_TEXT_LENGTH
+                        ? chapterText.substring(0, MAX_CHAPTER_TEXT_LENGTH) + "..."
+                        : chapterText;
+                chapter.setText(truncatedText);
+
+                // Generate chapter summary
+                String summary = chapterSummaryService.generateSummary(chapterText);
+                chapter.setSummary(summary);
+
                 // Detect reading segments within the chapter (stores offsets only, not text)
                 List<Segment> segments = segmentDetectionService.detectSegments(chapterText);
-                // Clear segment text to save space - only keep offsets
                 for (Segment segment : segments) {
-                    segment.setText(null);
+                    segment.setText(null); // Clear segment text - only keep offsets
                 }
                 chapter.setSegments(segments);
-                log.info("Chapter {} '{}' has {} segments", tc.chapterNumber(), tc.title(), segments.size());
+                log.info("Chapter {} '{}' - {} chars, {} segments, summary: {}",
+                        tc.chapterNumber(), tc.title(), truncatedText.length(), segments.size(),
+                        summary != null ? summary.substring(0, Math.min(50, summary.length())) + "..." : "null");
 
                 chapters.add(chapter);
             }
