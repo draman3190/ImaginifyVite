@@ -105,6 +105,7 @@ components/
   BookLibrary.tsx        Main page: header, responsive grid, loading/error/empty states
   BookCard.tsx           Book card with metadata, status badge, Download/Delete buttons
   UploadBookModal.tsx    File picker + two-step presigned URL upload flow
+  DeleteConfirmModal.tsx Styled confirmation dialog (React portal, dark theme)
   StatusBadge.tsx        Color-coded processing status pill
   EmptyState.tsx         Shown when library is empty
 hooks/
@@ -121,11 +122,13 @@ App.tsx                  Renders BookLibrary
 ```
 controller/          REST endpoints (ImageGenerationController, LibraryController)
 service/             Business logic orchestration
-  client/            AI provider interface + implementations (Gemini, Grok)
+  TextParsingService      Extracts metadata + chapters from text files
+  SegmentDetectionService Splits chapters into reading segments
+  client/                 AI provider interface + implementations (Gemini, Grok)
 handler/             Lambda event handlers (BookUploadEventHandler)
 repository/          DynamoDB data access (BookRepository)
 config/              AWS SDK bean configuration (AwsConfig, DynamoDbConfig)
-model/               Domain entities with DynamoDB annotations (Book, Chapter, ImageMetadata)
+model/               Domain entities: Book, Chapter, Segment, ImageMetadata
 dto/                 Request/response DTOs (separate from domain models)
 exception/           Custom exceptions + GlobalExceptionHandler (@RestControllerAdvice)
 ```
@@ -173,9 +176,28 @@ Stage differences:
 - Lambda memory: beta 1024MB, gamma 1536MB, prod 2048MB
 - Reserved concurrency: beta 5, gamma 10, prod unlimited
 
+### Text Parsing (`TextParsingService`)
+
+Extracts metadata and chapter structure from uploaded text files:
+
+**Metadata detection** (scans first 100 lines):
+- Explicit labels: `Title:`, `Author:`, `By:`, `Written by:`, `Language:`, `Genre:`
+- Inline patterns: "Title by Author", "A Novel by Author", "by Author Name"
+- Positional: standalone "BY" keyword (with blank line tolerance), author name near title
+- Supports initials (F. Scott Fitzgerald), ALL CAPS, hyphenated names
+
+**Chapter detection** with lookahead for titles on separate lines:
+- Standard: `Chapter 1`, `CHAPTER ONE`, `Chapter IV: Title`
+- Stephen King style: `<< 1 >> TITLE` or `<< 1 >>` with title on next line
+- Parts: `P A R T O N E`, `PART TWO: Subtitle` (captures subtitle after decorative lines)
+- Sections: `Section 1`, `Book 1`, `Act 1`, `Prologue`, `Epilogue`
+- Skips decorative lines (dashes, equals, asterisks) when looking for titles
+
+**Segment detection** (`SegmentDetectionService`): Splits chapters into 2-3 page reading chunks with natural pause points for image generation.
+
 ### Book Upload Event Processing
 
-When a `.txt` file is uploaded to the `books/` prefix in S3, an event notification triggers `BookUploadEventHandler` — a lightweight Lambda (plain Java, no Spring Boot). It downloads the file, parses metadata and chapters via `TextParsingService`, and updates the DynamoDB book record. This eliminates the need for clients to call `POST /confirm-upload` (kept as manual fallback).
+When a `.txt` file is uploaded to the `books/` prefix in S3, an event notification triggers `BookUploadEventHandler` — a lightweight Lambda (plain Java, no Spring Boot). It downloads the file, parses metadata and chapters via `TextParsingService`, detects reading segments, and updates the DynamoDB book record. This eliminates the need for clients to call `POST /confirm-upload` (kept as manual fallback).
 
 ```
 S3 PutObject (books/*.txt) → Event Notification → BookUploadEventHandler Lambda → DynamoDB
@@ -217,8 +239,12 @@ To build the backend JAR and event handler ZIP independently: `npm run build:bac
 
 ### Data Layer
 
-- **DynamoDB**: `imaginify-books` table, partition key `bookId`. Book entity contains nested Chapter list, each with ImageMetadata list.
-- **S3**: `imaginify-images` bucket for generated images
+- **DynamoDB**: `imaginify-books` table, partition key `bookId`
+  - Book: bookId, title, authors[], genre[], language, processingStatus, uploadTimestamp, chapters[]
+  - Chapter: chapterNumber, title, startOffset, textLength, segments[], images[] (text stored in S3, not DynamoDB)
+  - Segment: segmentNumber, startOffset, endOffset, images[]
+  - Optional fields (not yet populated): publisher, isbn, description, tone, artStyle, pageCount
+- **S3**: `imaginify-images` bucket for generated images; book text files at `books/{bookId}.txt`
 - **Secrets Manager**: `imaginify/api-keys` for AI provider API keys
 - **Region**: us-east-1
 
