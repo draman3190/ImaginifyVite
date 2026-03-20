@@ -10,6 +10,7 @@ import java.util.List;
 public class Book {
 
     private String bookId;
+    private String slug;           // URL-friendly identifier derived from title (e.g., "the-shining")
     private String title;
     private List<String> authors;
     private String language;
@@ -33,6 +34,14 @@ public class Book {
 
     public void setBookId(String bookId) {
         this.bookId = bookId;
+    }
+
+    public String getSlug() {
+        return slug;
+    }
+
+    public void setSlug(String slug) {
+        this.slug = slug;
     }
 
     public String getTitle() {

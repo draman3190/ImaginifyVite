@@ -184,8 +184,8 @@ class LibraryServiceTest {
         assertEquals(1, result.chapters().size());
 
         verify(bookRepository, times(2)).save(any(Book.class));
-        // Verify chapter text was uploaded to S3
-        verify(storageService).uploadText(eq("books/id-1/chapters/1.txt"), anyString());
+        // Verify chapter text was uploaded to S3 with slug and zero-padded chapter number
+        verify(storageService).uploadText(eq("books/parsed-title/chapters/01.txt"), anyString());
     }
 
     @Test
@@ -272,8 +272,9 @@ class LibraryServiceTest {
     @Test
     void getChapterText_existingBook_returnsTextFromS3() {
         Book book = createTestBook("id-1", "Book One");
+        book.setSlug("book-one");
         when(bookRepository.findById("id-1")).thenReturn(Optional.of(book));
-        when(storageService.downloadText("books/id-1/chapters/3.txt"))
+        when(storageService.downloadText("books/book-one/chapters/03.txt"))
                 .thenReturn("This is chapter 3 content.");
 
         String result = libraryService.getChapterText("id-1", 3);

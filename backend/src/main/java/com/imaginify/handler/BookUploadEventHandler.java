@@ -13,6 +13,7 @@ import com.imaginify.model.TextMetadata;
 import com.imaginify.service.ChapterSummaryService;
 import com.imaginify.service.SegmentDetectionService;
 import com.imaginify.service.TextParsingService;
+import com.imaginify.util.SlugUtils;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import software.amazon.awssdk.core.ResponseBytes;
@@ -156,6 +157,10 @@ public class BookUploadEventHandler implements RequestHandler<S3Event, String> {
             book.setLanguage(metadata.language());
             book.setFileUrl("s3://" + key);
 
+            // Generate slug from title for S3 paths
+            String slug = SlugUtils.slugify(book.getTitle());
+            book.setSlug(slug);
+
             List<Chapter> chapters = new ArrayList<>();
             for (TextChapter tc : metadata.chapters()) {
                 Chapter chapter = new Chapter();
@@ -169,7 +174,7 @@ public class BookUploadEventHandler implements RequestHandler<S3Event, String> {
                 String chapterText = fullText.substring(tc.startOffset(), endOffset);
 
                 // Upload chapter text to S3 (not stored in DynamoDB due to 400KB limit)
-                String chapterTextKey = String.format("books/%s/chapters/%d.txt", bookId, tc.chapterNumber());
+                String chapterTextKey = String.format("books/%s/chapters/%02d.txt", slug, tc.chapterNumber());
                 uploadChapterText(eventBucket, chapterTextKey, chapterText);
 
                 // Generate chapter summary

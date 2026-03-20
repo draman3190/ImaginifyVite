@@ -13,6 +13,7 @@ import com.imaginify.model.TextChapter;
 import com.imaginify.model.TextMetadata;
 import com.imaginify.model.ProcessingStatus;
 import com.imaginify.repository.BookRepository;
+import com.imaginify.util.SlugUtils;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
@@ -141,6 +142,10 @@ public class LibraryService {
             book.setLanguage(metadata.language());
             book.setFileUrl("s3://" + s3Key);
 
+            // Generate slug from title for S3 paths
+            String slug = SlugUtils.slugify(book.getTitle());
+            book.setSlug(slug);
+
             List<Chapter> chapters = new ArrayList<>();
             for (TextChapter tc : metadata.chapters()) {
                 Chapter chapter = new Chapter();
@@ -154,7 +159,7 @@ public class LibraryService {
                 String chapterText = fullText.substring(tc.startOffset(), endOffset);
 
                 // Upload chapter text to S3 (not stored in DynamoDB due to 400KB limit)
-                String chapterTextKey = String.format("books/%s/chapters/%d.txt", bookId, tc.chapterNumber());
+                String chapterTextKey = String.format("books/%s/chapters/%02d.txt", slug, tc.chapterNumber());
                 storageService.uploadText(chapterTextKey, chapterText);
 
                 // Generate chapter summary (stored in DynamoDB)
@@ -195,10 +200,10 @@ public class LibraryService {
      * Chapter text is stored separately in S3 due to DynamoDB's 400KB item size limit.
      */
     public String getChapterText(String bookId, int chapterNumber) {
-        bookRepository.findById(bookId)
+        Book book = bookRepository.findById(bookId)
                 .orElseThrow(() -> new BookNotFoundException(bookId));
 
-        String chapterKey = String.format("books/%s/chapters/%d.txt", bookId, chapterNumber);
+        String chapterKey = String.format("books/%s/chapters/%02d.txt", book.getSlug(), chapterNumber);
         return storageService.downloadText(chapterKey);
     }
 

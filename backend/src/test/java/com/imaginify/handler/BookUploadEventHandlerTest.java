@@ -87,6 +87,7 @@ class BookUploadEventHandlerTest {
         Book savedBook = bookCaptor.getValue();
         assertEquals(ProcessingStatus.COMPLETED.name(), savedBook.getProcessingStatus());
         assertEquals("My Great Book", savedBook.getTitle());
+        assertEquals("my-great-book", savedBook.getSlug());
         assertEquals(List.of("Jane Doe"), savedBook.getAuthors());
         assertEquals("English", savedBook.getLanguage());
         assertNotNull(savedBook.getChapters());
@@ -98,12 +99,12 @@ class BookUploadEventHandlerTest {
         Chapter chapter1 = savedBook.getChapters().get(0);
         assertNotNull(chapter1.getSummary());
 
-        // Verify chapter text was uploaded to S3
+        // Verify chapter text was uploaded to S3 with slug and zero-padded numbers
         ArgumentCaptor<PutObjectRequest> putCaptor = ArgumentCaptor.forClass(PutObjectRequest.class);
         verify(s3Client, times(2)).putObject(putCaptor.capture(), any(RequestBody.class));
         List<PutObjectRequest> puts = putCaptor.getAllValues();
-        assertEquals("books/" + BOOK_ID + "/chapters/1.txt", puts.get(0).key());
-        assertEquals("books/" + BOOK_ID + "/chapters/2.txt", puts.get(1).key());
+        assertEquals("books/my-great-book/chapters/01.txt", puts.get(0).key());
+        assertEquals("books/my-great-book/chapters/02.txt", puts.get(1).key());
     }
 
     @Test
