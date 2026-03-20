@@ -1,5 +1,7 @@
+import { useState } from 'react';
 import type { BookSummary } from '../types/book';
 import { StatusBadge } from './StatusBadge';
+import { DeleteConfirmModal } from './DeleteConfirmModal';
 
 interface BookCardProps {
   book: BookSummary;
@@ -7,8 +9,14 @@ interface BookCardProps {
 }
 
 export function BookCard({ book, onDelete }: BookCardProps) {
+  const [showDeleteModal, setShowDeleteModal] = useState(false);
   const authors = book.authors ?? [];
   const genre = book.genre ?? [];
+
+  const handleDeleteConfirm = () => {
+    onDelete(book.bookId);
+    setShowDeleteModal(false);
+  };
 
   return (
     <div className="card-enchanted relative flex flex-col rounded-lg p-5">
@@ -47,12 +55,20 @@ export function BookCard({ book, onDelete }: BookCardProps) {
           Download Images
         </button>
         <button
-          onClick={() => onDelete(book.bookId)}
+          onClick={() => setShowDeleteModal(true)}
           className="cursor-pointer rounded-lg border border-red-500/20 px-3 py-2 text-sm font-medium text-red-400 hover:bg-red-500/10 hover:border-red-500/30 transition-colors"
         >
           Delete
         </button>
       </div>
+
+      {showDeleteModal && (
+        <DeleteConfirmModal
+          bookTitle={book.title}
+          onConfirm={handleDeleteConfirm}
+          onCancel={() => setShowDeleteModal(false)}
+        />
+      )}
     </div>
   );
 }
