@@ -7,8 +7,10 @@ import com.amazonaws.services.lambda.runtime.events.models.s3.S3EventNotificatio
 import com.imaginify.model.Book;
 import com.imaginify.model.Chapter;
 import com.imaginify.model.ProcessingStatus;
+import com.imaginify.model.Segment;
 import com.imaginify.model.TextChapter;
 import com.imaginify.model.TextMetadata;
+import com.imaginify.service.SegmentDetectionService;
 import com.imaginify.service.TextParsingService;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -42,6 +44,7 @@ public class BookUploadEventHandler implements RequestHandler<S3Event, String> {
     private final S3Client s3Client;
     private final DynamoDbTable<Book> bookTable;
     private final TextParsingService textParsingService;
+    private final SegmentDetectionService segmentDetectionService;
     private final String bucketName;
 
     public BookUploadEventHandler() {
@@ -60,13 +63,17 @@ public class BookUploadEventHandler implements RequestHandler<S3Event, String> {
                 .build();
         this.bookTable = enhancedClient.table(tableName, TableSchema.fromBean(Book.class));
         this.textParsingService = new TextParsingService();
+        this.segmentDetectionService = new SegmentDetectionService();
     }
 
     BookUploadEventHandler(S3Client s3Client, DynamoDbTable<Book> bookTable,
-                           TextParsingService textParsingService, String bucketName) {
+                           TextParsingService textParsingService,
+                           SegmentDetectionService segmentDetectionService,
+                           String bucketName) {
         this.s3Client = s3Client;
         this.bookTable = bookTable;
         this.textParsingService = textParsingService;
+        this.segmentDetectionService = segmentDetectionService;
         this.bucketName = bucketName;
     }
 
@@ -149,11 +156,21 @@ public class BookUploadEventHandler implements RequestHandler<S3Event, String> {
                 chapter.setTitle(tc.title());
                 chapter.setStartOffset(tc.startOffset());
                 chapter.setTextLength(tc.textLength());
+                // Note: chapter text is NOT stored in DynamoDB to avoid 400KB limit
+                // Text can be retrieved from S3 using fileUrl + offsets when needed
 
-                // Extract and store the full chapter text for image generation prompts
+                // Extract chapter text temporarily for segment detection
                 int endOffset = Math.min(tc.startOffset() + tc.textLength(), fullText.length());
                 String chapterText = fullText.substring(tc.startOffset(), endOffset);
-                chapter.setText(chapterText);
+
+                // Detect reading segments within the chapter (stores offsets only, not text)
+                List<Segment> segments = segmentDetectionService.detectSegments(chapterText);
+                // Clear segment text to save space - only keep offsets
+                for (Segment segment : segments) {
+                    segment.setText(null);
+                }
+                chapter.setSegments(segments);
+                log.info("Chapter {} '{}' has {} segments", tc.chapterNumber(), tc.title(), segments.size());
 
                 chapters.add(chapter);
             }

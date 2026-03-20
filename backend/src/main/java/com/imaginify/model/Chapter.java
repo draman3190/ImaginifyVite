@@ -13,7 +13,8 @@ public class Chapter {
     private int textLength;
     private String text;           // Full chapter text for image generation prompts
     private String summary;        // AI-generated summary of chapter content
-    private List<ImageMetadata> images;
+    private List<Segment> segments; // Reading segments (2-3 page chunks) with natural pause points
+    private List<ImageMetadata> images; // Legacy: direct chapter images (prefer segment-level images)
 
     public int getChapterNumber() {
         return chapterNumber;
@@ -61,6 +62,14 @@ public class Chapter {
 
     public void setSummary(String summary) {
         this.summary = summary;
+    }
+
+    public List<Segment> getSegments() {
+        return segments;
+    }
+
+    public void setSegments(List<Segment> segments) {
+        this.segments = segments;
     }
 
     public List<ImageMetadata> getImages() {

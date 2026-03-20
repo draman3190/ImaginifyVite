@@ -6,6 +6,7 @@ import com.amazonaws.services.lambda.runtime.events.models.s3.S3EventNotificatio
 import com.imaginify.model.Book;
 import com.imaginify.model.Chapter;
 import com.imaginify.model.ProcessingStatus;
+import com.imaginify.service.SegmentDetectionService;
 import com.imaginify.service.TextParsingService;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -43,6 +44,7 @@ class BookUploadEventHandlerTest {
     private S3Client s3Client;
     private DynamoDbTable<Book> bookTable;
     private TextParsingService textParsingService;
+    private SegmentDetectionService segmentDetectionService;
     private Context context;
     private BookUploadEventHandler handler;
 
@@ -51,8 +53,9 @@ class BookUploadEventHandlerTest {
         s3Client = mock(S3Client.class);
         bookTable = mock(DynamoDbTable.class);
         textParsingService = new TextParsingService();
+        segmentDetectionService = new SegmentDetectionService();
         context = mock(Context.class);
-        handler = new BookUploadEventHandler(s3Client, bookTable, textParsingService, BUCKET_NAME);
+        handler = new BookUploadEventHandler(s3Client, bookTable, textParsingService, segmentDetectionService, BUCKET_NAME);
     }
 
     @Test
