@@ -51,6 +51,138 @@ class TextParsingServiceTest {
     }
 
     @Test
+    void parse_byOnOwnLineWithBlanks_extractsAuthor() {
+        // Stephen King style: BY on own line, blank lines, then author name
+        String text = """
+                THE SHINING
+
+
+                BY
+
+
+                STEPHEN KING
+
+
+                Chapter 1: The Beginning
+                Content here.
+                """;
+
+        TextMetadata metadata = textParsingService.parse(text.getBytes(StandardCharsets.UTF_8));
+
+        assertEquals("THE SHINING", metadata.title());
+        assertEquals(1, metadata.authors().size());
+        assertEquals("STEPHEN KING", metadata.authors().get(0));
+    }
+
+    @Test
+    void parse_titleByAuthorOnSameLine_extractsBoth() {
+        String text = """
+                The Great Gatsby by F. Scott Fitzgerald
+
+                Chapter 1
+                In my younger and more vulnerable years...
+                """;
+
+        TextMetadata metadata = textParsingService.parse(text.getBytes(StandardCharsets.UTF_8));
+
+        assertEquals("The Great Gatsby", metadata.title());
+        assertEquals(1, metadata.authors().size());
+        assertEquals("F. Scott Fitzgerald", metadata.authors().get(0));
+    }
+
+    @Test
+    void parse_aNovelByAuthor_extractsAuthor() {
+        String text = """
+                MYSTIC RIVER
+
+                A Novel by Dennis Lehane
+
+                Chapter 1
+                Content here.
+                """;
+
+        TextMetadata metadata = textParsingService.parse(text.getBytes(StandardCharsets.UTF_8));
+
+        assertEquals("MYSTIC RIVER", metadata.title());
+        assertEquals(1, metadata.authors().size());
+        assertEquals("Dennis Lehane", metadata.authors().get(0));
+    }
+
+    @Test
+    void parse_byAuthorOnOwnLine_extractsAuthor() {
+        String text = """
+                1984
+
+                by George Orwell
+
+                Chapter 1
+                It was a bright cold day in April...
+                """;
+
+        TextMetadata metadata = textParsingService.parse(text.getBytes(StandardCharsets.UTF_8));
+
+        assertEquals("1984", metadata.title());
+        assertEquals(1, metadata.authors().size());
+        assertEquals("George Orwell", metadata.authors().get(0));
+    }
+
+    @Test
+    void parse_writtenByLabel_extractsAuthor() {
+        String text = """
+                Title: The Catcher in the Rye
+                Written by: J. D. Salinger
+
+                Content here.
+                """;
+
+        TextMetadata metadata = textParsingService.parse(text.getBytes(StandardCharsets.UTF_8));
+
+        assertEquals("The Catcher in the Rye", metadata.title());
+        assertEquals(1, metadata.authors().size());
+        assertEquals("J. D. Salinger", metadata.authors().get(0));
+    }
+
+    @Test
+    void parse_authorFollowingTitlePositionally_extractsAuthor() {
+        // Common format: title, blank line, author name (no "by")
+        String text = """
+                TO KILL A MOCKINGBIRD
+
+                Harper Lee
+
+
+                Chapter 1
+                When he was nearly thirteen...
+                """;
+
+        TextMetadata metadata = textParsingService.parse(text.getBytes(StandardCharsets.UTF_8));
+
+        assertEquals("TO KILL A MOCKINGBIRD", metadata.title());
+        assertEquals(1, metadata.authors().size());
+        assertEquals("Harper Lee", metadata.authors().get(0));
+    }
+
+    @Test
+    void parse_doesNotMistakeContentForAuthor() {
+        // Make sure we don't pick up random content as author
+        String text = """
+                Short Stories
+
+                This is a collection of stories from various sources.
+                Each story has its own unique charm.
+
+                Chapter 1: The First Tale
+                Once upon a time...
+                """;
+
+        TextMetadata metadata = textParsingService.parse(text.getBytes(StandardCharsets.UTF_8));
+
+        assertEquals("Short Stories", metadata.title());
+        // Should NOT pick up "This is a collection..." as author
+        assertTrue(metadata.authors().isEmpty());
+    }
+
+    @Test
     void parse_multipleAuthors_extractsAll() {
         String text = """
                 Title: Collaborative Work
@@ -262,22 +394,107 @@ class TextParsingServiceTest {
 
     @Test
     void matchChapterLine_arabicNumber_matches() {
-        assertNotNull(textParsingService.matchChapterLine("Chapter 5", 0));
-        assertNotNull(textParsingService.matchChapterLine("Chapter 12: The Return", 0));
-        assertNotNull(textParsingService.matchChapterLine("CHAPTER 3", 0));
+        assertNotNull(matchChapterWithContext("Chapter 5"));
+        assertNotNull(matchChapterWithContext("Chapter 12: The Return"));
+        assertNotNull(matchChapterWithContext("CHAPTER 3"));
     }
 
     @Test
     void matchChapterLine_romanNumeral_matches() {
-        assertNotNull(textParsingService.matchChapterLine("Chapter IV", 0));
-        assertNotNull(textParsingService.matchChapterLine("Chapter XIV: Discovery", 0));
-        assertNotNull(textParsingService.matchChapterLine("CHAPTER XII", 0));
+        assertNotNull(matchChapterWithContext("Chapter IV"));
+        assertNotNull(matchChapterWithContext("Chapter XIV: Discovery"));
+        assertNotNull(matchChapterWithContext("CHAPTER XII"));
     }
 
     @Test
     void matchChapterLine_nonChapterLine_doesNotMatch() {
-        assertNull(textParsingService.matchChapterLine("This is just a regular line", 0));
-        assertNull(textParsingService.matchChapterLine("The chapter was interesting", 0));
-        assertNull(textParsingService.matchChapterLine("", 0));
+        assertNull(matchChapterWithContext("This is just a regular line"));
+        assertNull(matchChapterWithContext("The chapter was interesting"));
+        assertNull(matchChapterWithContext(""));
+    }
+
+    @Test
+    void matchChapterLine_stephenKingStyle_matches() {
+        assertNotNull(matchChapterWithContext("<< 1 >> JOB INTERVIEW"));
+        assertNotNull(matchChapterWithContext("<< 2 >> BOULDER"));
+        assertNotNull(matchChapterWithContext("<< 57 >> EXIT"));
+        assertNotNull(matchChapterWithContext("<< 7 >>"));
+    }
+
+    @Test
+    void parse_stephenKingStyleWithTitleOnNextLine_extractsTitle() {
+        String text = """
+                << 7 >>
+
+                IN ANOTHER BEDROOM
+
+                Danny awoke with the booming still loud in his ears.
+                """;
+
+        TextMetadata metadata = textParsingService.parse(text.getBytes(StandardCharsets.UTF_8));
+
+        assertEquals(1, metadata.chapters().size());
+        assertEquals("Chapter 7: IN ANOTHER BEDROOM", metadata.chapters().get(0).title());
+    }
+
+    @Test
+    void parse_partWithSubtitleAfterDecorativeLine_extractsSubtitle() {
+        String text = """
+                P A R T O N E
+                - - - - - - - - - - - - - -
+                PREFATORY MATTERS
+                - - - - - - - - - - - - - -
+
+                << 1 >> JOB INTERVIEW
+
+                Jack Torrance thought: Officious little prick.
+                """;
+
+        TextMetadata metadata = textParsingService.parse(text.getBytes(StandardCharsets.UTF_8));
+
+        assertEquals(2, metadata.chapters().size());
+        assertEquals("Part ONE: PREFATORY MATTERS", metadata.chapters().get(0).title());
+        assertEquals("Chapter 1: JOB INTERVIEW", metadata.chapters().get(1).title());
+    }
+
+    @Test
+    void parse_mixedChapterFormats_extractsAllTitles() {
+        String text = """
+                P A R T T W O
+                - - - - - - - - - - -
+                Closing Day
+                - - - - - - - - - - -
+
+                << 8 >>
+
+                A VIEW OF THE OVERLOOK
+
+                The hotel was beautiful in the afternoon sun.
+
+                << 9 >> CHECKING IT OUT
+
+                Watson led them through the basement.
+                """;
+
+        TextMetadata metadata = textParsingService.parse(text.getBytes(StandardCharsets.UTF_8));
+
+        assertEquals(3, metadata.chapters().size());
+        assertEquals("Part TWO: Closing Day", metadata.chapters().get(0).title());
+        assertEquals("Chapter 8: A VIEW OF THE OVERLOOK", metadata.chapters().get(1).title());
+        assertEquals("Chapter 9: CHECKING IT OUT", metadata.chapters().get(2).title());
+    }
+
+    @Test
+    void matchChapterLine_partWithSpacedLetters_matches() {
+        assertNotNull(matchChapterWithContext("P A R T O N E"));
+        assertNotNull(matchChapterWithContext("P A R T T W O"));
+    }
+
+    /**
+     * Helper to test chapter matching with proper context (blank lines around it)
+     */
+    private Object matchChapterWithContext(String chapterLine) {
+        String[] lines = {"", chapterLine, ""};
+        return textParsingService.matchChapterLine(chapterLine, 0, 1, lines);
     }
 }

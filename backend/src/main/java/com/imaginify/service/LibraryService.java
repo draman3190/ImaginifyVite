@@ -132,6 +132,9 @@ public class LibraryService {
                 book.setTitle(metadata.title());
             }
             book.setAuthors(metadata.authors().isEmpty() ? book.getAuthors() : metadata.authors());
+            if (metadata.genre() != null && !metadata.genre().isEmpty()) {
+                book.setGenre(metadata.genre());
+            }
             book.setLanguage(metadata.language());
             book.setFileUrl("s3://" + s3Key);
 
