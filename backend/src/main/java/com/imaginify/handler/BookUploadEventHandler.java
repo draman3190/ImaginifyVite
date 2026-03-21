@@ -13,6 +13,7 @@ import com.imaginify.model.TextMetadata;
 import com.imaginify.service.ChapterSummaryService;
 import com.imaginify.service.SegmentDetectionService;
 import com.imaginify.service.TextParsingService;
+import com.imaginify.util.ChapterTypeDetector;
 import com.imaginify.util.SlugUtils;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -175,6 +176,10 @@ public class BookUploadEventHandler implements RequestHandler<S3Event, String> {
                 chapter.setStartOffset(tc.startOffset());
                 chapter.setTextLength(tc.textLength());
 
+                // Detect chapter type (CONTENT vs TRANSITION for part headers/dividers)
+                String chapterType = ChapterTypeDetector.detectType(tc.title(), tc.textLength());
+                chapter.setChapterType(chapterType);
+
                 // Extract chapter text
                 int endOffset = Math.min(tc.startOffset() + tc.textLength(), fullText.length());
                 String chapterText = fullText.substring(tc.startOffset(), endOffset);
@@ -193,8 +198,8 @@ public class BookUploadEventHandler implements RequestHandler<S3Event, String> {
                     segment.setText(null); // Clear segment text - only keep offsets
                 }
                 chapter.setSegments(segments);
-                log.info("Chapter {} '{}' - {} chars, {} segments, summary: {}",
-                        tc.chapterNumber(), tc.title(), chapterText.length(), segments.size(),
+                log.info("Chapter {} '{}' [{}] - {} chars, {} segments, summary: {}",
+                        tc.chapterNumber(), tc.title(), chapterType, chapterText.length(), segments.size(),
                         summary != null ? summary.substring(0, Math.min(50, summary.length())) + "..." : "null");
 
                 chapters.add(chapter);

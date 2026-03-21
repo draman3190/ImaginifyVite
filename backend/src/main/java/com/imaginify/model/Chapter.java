@@ -10,6 +10,7 @@ public class Chapter {
 
     private int chapterNumber;
     private String title;
+    private String chapterType;    // "CONTENT" for regular chapters, "TRANSITION" for part headers/dividers
     private int startOffset;
     private int textLength;
     private String text;           // Chapter text stored in S3, not DynamoDB (use @DynamoDbIgnore)
@@ -31,6 +32,14 @@ public class Chapter {
 
     public void setTitle(String title) {
         this.title = title;
+    }
+
+    public String getChapterType() {
+        return chapterType;
+    }
+
+    public void setChapterType(String chapterType) {
+        this.chapterType = chapterType;
     }
 
     public int getStartOffset() {

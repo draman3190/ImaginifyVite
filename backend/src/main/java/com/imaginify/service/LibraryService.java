@@ -13,6 +13,7 @@ import com.imaginify.model.TextChapter;
 import com.imaginify.model.TextMetadata;
 import com.imaginify.model.ProcessingStatus;
 import com.imaginify.repository.BookRepository;
+import com.imaginify.util.ChapterTypeDetector;
 import com.imaginify.util.SlugUtils;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -174,6 +175,9 @@ public class LibraryService {
                 chapter.setTitle(tc.title());
                 chapter.setStartOffset(tc.startOffset());
                 chapter.setTextLength(tc.textLength());
+
+                // Detect chapter type (CONTENT vs TRANSITION for part headers/dividers)
+                chapter.setChapterType(ChapterTypeDetector.detectType(tc.title(), tc.textLength()));
 
                 // Extract chapter text
                 int endOffset = Math.min(tc.startOffset() + tc.textLength(), fullText.length());
