@@ -393,6 +393,38 @@ class TextParsingServiceTest {
     }
 
     @Test
+    void parse_windowsLineEndings_chapterBoundariesCorrect() {
+        // Use \r\n line endings (Windows style)
+        String text = "Chapter 1: First\r\n" +
+                      "Content of chapter one.\r\n" +
+                      "More first chapter content.\r\n" +
+                      "\r\n" +
+                      "Chapter 2: Second\r\n" +
+                      "Content of chapter two.";
+
+        TextMetadata metadata = textParsingService.parse(text.getBytes(StandardCharsets.UTF_8));
+
+        assertEquals(2, metadata.chapters().size());
+
+        // Extract chapter text to verify boundaries
+        String chapter1Text = text.substring(
+                metadata.chapters().get(0).startOffset(),
+                metadata.chapters().get(0).startOffset() + metadata.chapters().get(0).textLength());
+        String chapter2Text = text.substring(
+                metadata.chapters().get(1).startOffset(),
+                metadata.chapters().get(1).startOffset() + metadata.chapters().get(1).textLength());
+
+        // Chapter 1 should contain its full content
+        assertTrue(chapter1Text.contains("Content of chapter one"), "Chapter 1 should have its content");
+        assertTrue(chapter1Text.contains("More first chapter content"), "Chapter 1 should have all its content");
+
+        // Chapter 2 should start with Chapter 2 marker, not content from chapter 1
+        assertTrue(chapter2Text.startsWith("Chapter 2"), "Chapter 2 should start with its header");
+        assertTrue(chapter2Text.contains("Content of chapter two"), "Chapter 2 should have its content");
+        assertFalse(chapter2Text.contains("More first chapter content"), "Chapter 2 should not have chapter 1 content");
+    }
+
+    @Test
     void matchChapterLine_arabicNumber_matches() {
         assertNotNull(matchChapterWithContext("Chapter 5"));
         assertNotNull(matchChapterWithContext("Chapter 12: The Return"));

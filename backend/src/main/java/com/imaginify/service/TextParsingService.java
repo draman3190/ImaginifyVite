@@ -334,15 +334,24 @@ public class TextParsingService {
 
     private List<TextChapter> detectChapters(String text, String[] lines) {
         List<ChapterBreak> breaks = new ArrayList<>();
-        int offset = 0;
 
+        // Determine line ending length (handle both Unix \n and Windows \r\n)
+        boolean hasWindowsLineEndings = text.contains("\r\n");
+        int lineEndingLength = hasWindowsLineEndings ? 2 : 1;
+        log.debug("Detecting chapters with line ending length: {}", lineEndingLength);
+
+        int offset = 0;
         for (int i = 0; i < lines.length; i++) {
             String line = lines[i];
             ChapterBreak chapterBreak = matchChapterLine(line, offset, i, lines);
             if (chapterBreak != null) {
                 breaks.add(chapterBreak);
             }
-            offset += line.length() + 1; // +1 for the newline
+            // Add line ending length, but not for the last line if text doesn't end with newline
+            boolean isLastLine = (i == lines.length - 1);
+            boolean textEndsWithNewline = text.endsWith("\n");
+            int endingLength = (isLastLine && !textEndsWithNewline) ? 0 : lineEndingLength;
+            offset += line.length() + endingLength;
         }
 
         if (breaks.isEmpty()) {
