@@ -252,7 +252,7 @@ export class ImaginifyStack extends cdk.Stack {
 
     eventHandlerRole.addToPolicy(new iam.PolicyStatement({
       effect: iam.Effect.ALLOW,
-      actions: ['s3:GetObject', 's3:PutObject'],
+      actions: ['s3:GetObject', 's3:PutObject', 's3:DeleteObject'],
       resources: [`${this.bucket.bucketArn}/books/*`],
     }));
 
