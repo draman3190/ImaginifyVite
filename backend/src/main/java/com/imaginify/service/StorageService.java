@@ -6,6 +6,7 @@ import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 import software.amazon.awssdk.core.sync.RequestBody;
 import software.amazon.awssdk.services.s3.S3Client;
+import software.amazon.awssdk.services.s3.model.CopyObjectRequest;
 import software.amazon.awssdk.services.s3.model.DeleteObjectRequest;
 import software.amazon.awssdk.services.s3.model.GetObjectRequest;
 import software.amazon.awssdk.services.s3.model.HeadObjectRequest;
@@ -87,6 +88,20 @@ public class StorageService {
                         .bucket(bucketName)
                         .key(key)
                         .build());
+    }
+
+    public void moveFile(String sourceKey, String destKey) {
+        log.info("Moving file in S3: {} -> {}", sourceKey, destKey);
+        s3Client.copyObject(CopyObjectRequest.builder()
+                .sourceBucket(bucketName)
+                .sourceKey(sourceKey)
+                .destinationBucket(bucketName)
+                .destinationKey(destKey)
+                .build());
+        s3Client.deleteObject(DeleteObjectRequest.builder()
+                .bucket(bucketName)
+                .key(sourceKey)
+                .build());
     }
 
     public String generatePresignedUploadUrl(String key, String contentType) {

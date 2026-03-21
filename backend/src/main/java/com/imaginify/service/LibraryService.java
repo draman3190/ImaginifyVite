@@ -81,16 +81,33 @@ public class LibraryService {
     }
 
     public void deleteBook(String bookId) {
-        bookRepository.findById(bookId)
+        Book book = bookRepository.findById(bookId)
                 .orElseThrow(() -> new BookNotFoundException(bookId));
-        log.info("Deleting book: id={}", bookId);
+        log.info("Deleting book: id={}, slug={}", bookId, book.getSlug());
 
-        String bookKey = BOOK_KEY_PREFIX + bookId + ".txt";
-        try {
-            storageService.deleteFile(bookKey);
-            log.info("Deleted book file from S3: key={}", bookKey);
-        } catch (Exception e) {
-            log.warn("Failed to delete book file from S3 (may not exist): key={}, error={}", bookKey, e.getMessage());
+        // Delete book file and chapter files from S3
+        if (book.getSlug() != null) {
+            try {
+                // Delete the main book file
+                String bookKey = String.format("books/%s/book.txt", book.getSlug());
+                storageService.deleteFile(bookKey);
+                log.info("Deleted book file from S3: key={}", bookKey);
+
+                // Delete chapter files
+                if (book.getChapters() != null) {
+                    for (Chapter chapter : book.getChapters()) {
+                        String chapterKey = String.format("books/%s/chapters/%02d.txt",
+                                book.getSlug(), chapter.getChapterNumber());
+                        try {
+                            storageService.deleteFile(chapterKey);
+                        } catch (Exception e) {
+                            log.warn("Failed to delete chapter file: key={}", chapterKey);
+                        }
+                    }
+                }
+            } catch (Exception e) {
+                log.warn("Failed to delete book files from S3: slug={}, error={}", book.getSlug(), e.getMessage());
+            }
         }
 
         bookRepository.deleteById(bookId);
@@ -140,11 +157,15 @@ public class LibraryService {
                 book.setGenre(metadata.genre());
             }
             book.setLanguage(metadata.language());
-            book.setFileUrl("s3://" + s3Key);
 
             // Generate slug from title for S3 paths
             String slug = SlugUtils.slugify(book.getTitle());
             book.setSlug(slug);
+
+            // Move book file to slug-based path
+            String newBookKey = String.format("books/%s/book.txt", slug);
+            storageService.moveFile(s3Key, newBookKey);
+            book.setFileUrl("s3://" + newBookKey);
 
             List<Chapter> chapters = new ArrayList<>();
             for (TextChapter tc : metadata.chapters()) {
@@ -186,10 +207,11 @@ public class LibraryService {
     }
 
     public PresignedDownloadUrlResponse getDownloadUrl(String bookId) {
-        bookRepository.findById(bookId)
+        Book book = bookRepository.findById(bookId)
                 .orElseThrow(() -> new BookNotFoundException(bookId));
 
-        String s3Key = BOOK_KEY_PREFIX + bookId + ".txt";
+        // Use slug-based path: books/{slug}/book.txt
+        String s3Key = String.format("books/%s/book.txt", book.getSlug());
         String downloadUrl = storageService.generatePresignedDownloadUrl(s3Key);
         return new PresignedDownloadUrlResponse(bookId, downloadUrl,
                 storageService.getPresignedUrlExpirationMinutes());

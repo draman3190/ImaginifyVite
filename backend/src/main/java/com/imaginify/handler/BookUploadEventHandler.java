@@ -27,6 +27,8 @@ import software.amazon.awssdk.http.urlconnection.UrlConnectionHttpClient;
 import software.amazon.awssdk.services.dynamodb.DynamoDbClient;
 import software.amazon.awssdk.services.dynamodb.model.ConditionalCheckFailedException;
 import software.amazon.awssdk.services.s3.S3Client;
+import software.amazon.awssdk.services.s3.model.CopyObjectRequest;
+import software.amazon.awssdk.services.s3.model.DeleteObjectRequest;
 import software.amazon.awssdk.services.s3.model.GetObjectRequest;
 import software.amazon.awssdk.services.s3.model.GetObjectResponse;
 import software.amazon.awssdk.services.s3.model.PutObjectRequest;
@@ -155,11 +157,15 @@ public class BookUploadEventHandler implements RequestHandler<S3Event, String> {
                 book.setGenre(metadata.genre());
             }
             book.setLanguage(metadata.language());
-            book.setFileUrl("s3://" + key);
 
             // Generate slug from title for S3 paths
             String slug = SlugUtils.slugify(book.getTitle());
             book.setSlug(slug);
+
+            // Copy book file to slug-based path and delete the UUID-based file
+            String newBookKey = String.format("books/%s/book.txt", slug);
+            copyAndDeleteFile(eventBucket, key, newBookKey);
+            book.setFileUrl("s3://" + newBookKey);
 
             List<Chapter> chapters = new ArrayList<>();
             for (TextChapter tc : metadata.chapters()) {
@@ -214,5 +220,19 @@ public class BookUploadEventHandler implements RequestHandler<S3Event, String> {
                         .contentType("text/plain; charset=utf-8")
                         .build(),
                 RequestBody.fromString(text));
+    }
+
+    private void copyAndDeleteFile(String bucket, String sourceKey, String destKey) {
+        log.info("Moving book file: {} -> {}", sourceKey, destKey);
+        s3Client.copyObject(CopyObjectRequest.builder()
+                .sourceBucket(bucket)
+                .sourceKey(sourceKey)
+                .destinationBucket(bucket)
+                .destinationKey(destKey)
+                .build());
+        s3Client.deleteObject(DeleteObjectRequest.builder()
+                .bucket(bucket)
+                .key(sourceKey)
+                .build());
     }
 }

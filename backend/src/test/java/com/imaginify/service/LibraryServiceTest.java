@@ -114,17 +114,19 @@ class LibraryServiceTest {
     @Test
     void deleteBook_existingBook_deletesFromDbAndS3() {
         Book book = createTestBook("id-1", "Book One");
+        book.setSlug("book-one");
         when(bookRepository.findById("id-1")).thenReturn(Optional.of(book));
 
         libraryService.deleteBook("id-1");
 
-        verify(storageService).deleteFile("books/id-1.txt");
+        verify(storageService).deleteFile("books/book-one/book.txt");
         verify(bookRepository).deleteById("id-1");
     }
 
     @Test
     void deleteBook_s3DeleteFails_stillDeletesFromDb() {
         Book book = createTestBook("id-1", "Book One");
+        book.setSlug("book-one");
         when(bookRepository.findById("id-1")).thenReturn(Optional.of(book));
         doThrow(new RuntimeException("S3 error")).when(storageService).deleteFile(anyString());
 
@@ -224,8 +226,9 @@ class LibraryServiceTest {
     @Test
     void getDownloadUrl_existingBook_returnsPresignedUrl() {
         Book book = createTestBook("id-1", "Book One");
+        book.setSlug("book-one");
         when(bookRepository.findById("id-1")).thenReturn(Optional.of(book));
-        when(storageService.generatePresignedDownloadUrl("books/id-1.txt"))
+        when(storageService.generatePresignedDownloadUrl("books/book-one/book.txt"))
                 .thenReturn("https://s3.example.com/download-url");
         when(storageService.getPresignedUrlExpirationMinutes()).thenReturn(15);
 
