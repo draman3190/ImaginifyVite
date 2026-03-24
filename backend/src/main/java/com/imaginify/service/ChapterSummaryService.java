@@ -1,5 +1,8 @@
 package com.imaginify.service;
 
+import com.imaginify.service.client.GeminiTextClient;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
 
 import java.util.ArrayList;
@@ -8,30 +11,136 @@ import java.util.List;
 /**
  * Generates summaries for chapter text.
  *
- * Uses extractive summarization that samples sentences from the beginning,
- * middle, and end of the chapter to provide a comprehensive overview.
- * Produces 3-5 sentences that represent the full chapter content.
+ * Primary: Uses Gemini AI to generate abstractive 3-5 sentence summaries.
+ * Fallback: Uses extractive summarization that samples sentences from the
+ * beginning, middle, and end of the chapter.
+ *
+ * Skips summarization for TRANSITION chapters (part headers, interludes, etc.)
  */
 @Service
 public class ChapterSummaryService {
+
+    private static final Logger log = LoggerFactory.getLogger(ChapterSummaryService.class);
 
     private static final int MAX_SUMMARY_LENGTH = 800;
     private static final int TARGET_SENTENCE_COUNT = 5;
     private static final int MIN_SENTENCE_COUNT = 3;
 
+    // Chapter type constants (must match ChapterTypeDetector)
+    private static final String TYPE_TRANSITION = "TRANSITION";
+
+    private static final String SUMMARIZATION_PROMPT_TEMPLATE = """
+            Write exactly 3 complete sentences summarizing this book chapter.
+            Focus on the main events and character actions.
+            Use present tense. Each sentence must end with a period.
+
+            Chapter text:
+            %s
+
+            Write your 3-sentence summary:""";
+
+    // Maximum characters of chapter text to send to the model
+    private static final int MAX_CHAPTER_TEXT_FOR_MODEL = 15000;
+
+    private final GeminiTextClient geminiTextClient;
+
+    /**
+     * Constructor for Spring context (no AI client, extractive only).
+     */
+    public ChapterSummaryService() {
+        this.geminiTextClient = null;
+    }
+
+    /**
+     * Constructor with Gemini client for AI-powered summarization.
+     */
+    public ChapterSummaryService(GeminiTextClient geminiTextClient) {
+        this.geminiTextClient = geminiTextClient;
+    }
+
     /**
      * Generate a summary for the given chapter text.
-     * Scans the full chapter and extracts representative sentences from
-     * beginning, middle, and end to create a 3-5 sentence summary.
+     * Uses Gemini AI if available, falls back to extractive summarization.
      *
      * @param chapterText the full chapter text
      * @return a summary string, or null if text is empty
      */
     public String generateSummary(String chapterText) {
+        return generateSummary(chapterText, null);
+    }
+
+    /**
+     * Generate a summary for the given chapter text, considering the chapter type.
+     * TRANSITION chapters (part headers, interludes) are not summarized.
+     *
+     * @param chapterText the full chapter text
+     * @param chapterType the chapter type (CONTENT or TRANSITION), or null
+     * @return a summary string, or null if text is empty or chapter is TRANSITION
+     */
+    public String generateSummary(String chapterText, String chapterType) {
         if (chapterText == null || chapterText.isBlank()) {
             return null;
         }
 
+        // Skip summarization for transition chapters
+        if (TYPE_TRANSITION.equals(chapterType)) {
+            log.debug("Skipping summary for TRANSITION chapter");
+            return null;
+        }
+
+        // Try AI summarization first
+        if (geminiTextClient != null && geminiTextClient.isConfigured()) {
+            String aiSummary = generateAiSummary(chapterText);
+            if (aiSummary != null && !aiSummary.isBlank()) {
+                return aiSummary;
+            }
+            log.debug("AI summarization failed, falling back to extractive");
+        }
+
+        // Fall back to extractive summarization
+        return generateExtractiveSummary(chapterText);
+    }
+
+    /**
+     * Generate an AI-powered summary using Gemini.
+     */
+    private String generateAiSummary(String chapterText) {
+        try {
+            // Truncate very long chapters to stay within model context limits
+            String textForModel = chapterText.length() > MAX_CHAPTER_TEXT_FOR_MODEL
+                    ? chapterText.substring(0, MAX_CHAPTER_TEXT_FOR_MODEL) + "..."
+                    : chapterText;
+
+            String prompt = String.format(SUMMARIZATION_PROMPT_TEMPLATE, textForModel);
+            String summary = geminiTextClient.generateText(prompt);
+
+            if (summary != null) {
+                // Clean up the response
+                summary = summary.trim();
+
+                // Remove any leading "Summary:" prefix the model might add
+                if (summary.toLowerCase().startsWith("summary:")) {
+                    summary = summary.substring(8).trim();
+                }
+
+                // Truncate if too long
+                if (summary.length() > MAX_SUMMARY_LENGTH) {
+                    summary = truncateToLength(summary, MAX_SUMMARY_LENGTH);
+                }
+
+                log.debug("Generated AI summary: {} chars", summary.length());
+                return summary;
+            }
+        } catch (Exception e) {
+            log.warn("Error generating AI summary: {}", e.getMessage());
+        }
+        return null;
+    }
+
+    /**
+     * Generate an extractive summary by sampling representative sentences.
+     */
+    private String generateExtractiveSummary(String chapterText) {
         String cleaned = cleanText(chapterText);
         if (cleaned.length() <= MAX_SUMMARY_LENGTH) {
             return cleaned;

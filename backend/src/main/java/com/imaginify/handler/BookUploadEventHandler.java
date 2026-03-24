@@ -33,7 +33,10 @@ import software.amazon.awssdk.services.s3.model.DeleteObjectRequest;
 import software.amazon.awssdk.services.s3.model.GetObjectRequest;
 import software.amazon.awssdk.services.s3.model.GetObjectResponse;
 import software.amazon.awssdk.services.s3.model.PutObjectRequest;
+import software.amazon.awssdk.services.secretsmanager.SecretsManagerClient;
 import software.amazon.awssdk.core.sync.RequestBody;
+
+import com.imaginify.service.client.GeminiTextClient;
 
 import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
@@ -58,6 +61,7 @@ public class BookUploadEventHandler implements RequestHandler<S3Event, String> {
     public BookUploadEventHandler() {
         String tableName = System.getenv("TABLE_NAME");
         this.bucketName = System.getenv("BUCKET_NAME");
+        String secretName = System.getenv("SECRET_NAME");
 
         this.s3Client = S3Client.builder()
                 .httpClient(UrlConnectionHttpClient.create())
@@ -72,7 +76,21 @@ public class BookUploadEventHandler implements RequestHandler<S3Event, String> {
         this.bookTable = enhancedClient.table(tableName, TableSchema.fromBean(Book.class));
         this.textParsingService = new TextParsingService();
         this.segmentDetectionService = new SegmentDetectionService();
-        this.chapterSummaryService = new ChapterSummaryService();
+
+        // Initialize Gemini client for AI-powered chapter summarization
+        GeminiTextClient geminiClient = null;
+        if (secretName != null && !secretName.isBlank()) {
+            try {
+                SecretsManagerClient secretsClient = SecretsManagerClient.builder()
+                        .httpClient(UrlConnectionHttpClient.create())
+                        .build();
+                geminiClient = new GeminiTextClient(secretsClient, secretName);
+                log.info("Gemini client initialized, AI summarization enabled: {}", geminiClient.isConfigured());
+            } catch (Exception e) {
+                log.warn("Failed to initialize Gemini client, falling back to extractive summarization", e);
+            }
+        }
+        this.chapterSummaryService = new ChapterSummaryService(geminiClient);
     }
 
     BookUploadEventHandler(S3Client s3Client, DynamoDbTable<Book> bookTable,
@@ -168,6 +186,8 @@ public class BookUploadEventHandler implements RequestHandler<S3Event, String> {
             copyAndDeleteFile(eventBucket, key, newBookKey);
             book.setFileUrl("s3://" + newBookKey);
 
+            // First pass: Create chapter structures with metadata (no summaries yet)
+            // This allows frontend to show totalChapters immediately
             List<Chapter> chapters = new ArrayList<>();
             for (TextChapter tc : metadata.chapters()) {
                 Chapter chapter = new Chapter();
@@ -175,10 +195,17 @@ public class BookUploadEventHandler implements RequestHandler<S3Event, String> {
                 chapter.setTitle(tc.title());
                 chapter.setStartOffset(tc.startOffset());
                 chapter.setTextLength(tc.textLength());
+                chapter.setChapterType(ChapterTypeDetector.detectType(tc.title(), tc.textLength()));
+                chapters.add(chapter);
+            }
+            book.setChapters(chapters);
+            bookTable.putItem(book); // Save with chapter count for progress tracking
+            log.info("Book metadata saved with {} chapters, beginning summarization", chapters.size());
 
-                // Detect chapter type (CONTENT vs TRANSITION for part headers/dividers)
-                String chapterType = ChapterTypeDetector.detectType(tc.title(), tc.textLength());
-                chapter.setChapterType(chapterType);
+            // Second pass: Generate summaries and save progress incrementally
+            for (int i = 0; i < metadata.chapters().size(); i++) {
+                TextChapter tc = metadata.chapters().get(i);
+                Chapter chapter = chapters.get(i);
 
                 // Extract chapter text
                 int endOffset = Math.min(tc.startOffset() + tc.textLength(), fullText.length());
@@ -188,8 +215,8 @@ public class BookUploadEventHandler implements RequestHandler<S3Event, String> {
                 String chapterTextKey = String.format("books/%s/chapters/%02d.txt", slug, tc.chapterNumber());
                 uploadChapterText(eventBucket, chapterTextKey, chapterText);
 
-                // Generate chapter summary
-                String summary = chapterSummaryService.generateSummary(chapterText);
+                // Generate chapter summary (skips TRANSITION chapters)
+                String summary = chapterSummaryService.generateSummary(chapterText, chapter.getChapterType());
                 chapter.setSummary(summary);
 
                 // Detect reading segments within the chapter (stores offsets only, not text)
@@ -198,11 +225,13 @@ public class BookUploadEventHandler implements RequestHandler<S3Event, String> {
                     segment.setText(null); // Clear segment text - only keep offsets
                 }
                 chapter.setSegments(segments);
+
                 log.info("Chapter {} '{}' [{}] - {} chars, {} segments, summary: {}",
-                        tc.chapterNumber(), tc.title(), chapterType, chapterText.length(), segments.size(),
+                        tc.chapterNumber(), tc.title(), chapter.getChapterType(), chapterText.length(), segments.size(),
                         summary != null ? summary.substring(0, Math.min(50, summary.length())) + "..." : "null");
 
-                chapters.add(chapter);
+                // Save progress after each chapter for real-time tracking
+                bookTable.putItem(book);
             }
             book.setChapters(chapters);
 
