@@ -245,13 +245,26 @@ public class LibraryService {
     }
 
     private BookSummaryResponse toSummary(Book book) {
+        int totalChapters = 0;
+        int processedChapters = 0;
+
+        if (book.getChapters() != null) {
+            totalChapters = book.getChapters().size();
+            processedChapters = (int) book.getChapters().stream()
+                    .filter(ch -> ch.getSummary() != null && !ch.getSummary().isBlank())
+                    .count();
+        }
+
         return new BookSummaryResponse(
                 book.getBookId(),
                 book.getTitle(),
                 book.getAuthors(),
                 book.getGenre(),
                 book.getPageCount(),
-                book.getProcessingStatus());
+                book.getProcessingStatus(),
+                totalChapters,
+                processedChapters,
+                book.getUploadTimestamp());
     }
 
     private BookResponse toResponse(Book book) {

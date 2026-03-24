@@ -8,5 +8,8 @@ public record BookSummaryResponse(
         List<String> authors,
         List<String> genre,
         int pageCount,
-        String processingStatus
+        String processingStatus,
+        int totalChapters,
+        int processedChapters,
+        String uploadTimestamp
 ) {}
