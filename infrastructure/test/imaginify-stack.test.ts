@@ -304,6 +304,7 @@ describe('ImaginifyStack', () => {
         Variables: Match.objectLike({
           TABLE_NAME: Match.anyValue(),
           BUCKET_NAME: Match.anyValue(),
+          SECRET_NAME: Match.anyValue(),
         }),
       }),
     });
@@ -339,13 +340,30 @@ describe('ImaginifyStack', () => {
     });
   });
 
-  test('event handler role has S3 GetObject and PutObject permissions scoped to books prefix', () => {
+  test('event handler role has S3 GetObject, PutObject, DeleteObject permissions scoped to books prefix', () => {
     betaTemplate.hasResourceProperties('AWS::IAM::Policy', {
       PolicyDocument: Match.objectLike({
         Statement: Match.arrayWith([
           Match.objectLike({
             Effect: 'Allow',
-            Action: ['s3:GetObject', 's3:PutObject'],
+            Action: ['s3:GetObject', 's3:PutObject', 's3:DeleteObject'],
+          }),
+        ]),
+      }),
+    });
+  });
+
+  test('event handler role has Secrets Manager and KMS permissions for Gemini API key', () => {
+    betaTemplate.hasResourceProperties('AWS::IAM::Policy', {
+      PolicyDocument: Match.objectLike({
+        Statement: Match.arrayWith([
+          Match.objectLike({
+            Effect: 'Allow',
+            Action: 'secretsmanager:GetSecretValue',
+          }),
+          Match.objectLike({
+            Effect: 'Allow',
+            Action: 'kms:Decrypt',
           }),
         ]),
       }),

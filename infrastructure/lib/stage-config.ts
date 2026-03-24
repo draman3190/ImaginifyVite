@@ -26,7 +26,7 @@ export const STAGE_CONFIGS: Record<string, StageConfig> = {
     lambdaMemoryMb: 1024,
     lambdaTimeoutSeconds: 30,
     eventHandlerMemoryMb: 512,
-    eventHandlerTimeoutSeconds: 60,
+    eventHandlerTimeoutSeconds: 900,  // 15 min for AI summarization with rate limit waits
   },
   gamma: {
     stageName: 'gamma',
@@ -38,7 +38,7 @@ export const STAGE_CONFIGS: Record<string, StageConfig> = {
     lambdaTimeoutSeconds: 30,
     lambdaReservedConcurrency: 10,
     eventHandlerMemoryMb: 768,
-    eventHandlerTimeoutSeconds: 60,
+    eventHandlerTimeoutSeconds: 900,  // 15 min for AI summarization with rate limit waits
   },
   prod: {
     stageName: 'prod',
@@ -49,6 +49,6 @@ export const STAGE_CONFIGS: Record<string, StageConfig> = {
     lambdaMemoryMb: 2048,
     lambdaTimeoutSeconds: 30,
     eventHandlerMemoryMb: 1024,
-    eventHandlerTimeoutSeconds: 60,
+    eventHandlerTimeoutSeconds: 900,  // 15 min for AI summarization with rate limit waits
   },
 };

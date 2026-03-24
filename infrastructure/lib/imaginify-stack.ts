@@ -256,6 +256,20 @@ export class ImaginifyStack extends cdk.Stack {
       resources: [`${this.bucket.bucketArn}/books/*`],
     }));
 
+    // Secrets Manager access for Gemini API key
+    eventHandlerRole.addToPolicy(new iam.PolicyStatement({
+      effect: iam.Effect.ALLOW,
+      actions: ['secretsmanager:GetSecretValue'],
+      resources: [this.secret.secretArn],
+    }));
+
+    // KMS access to decrypt the secret
+    eventHandlerRole.addToPolicy(new iam.PolicyStatement({
+      effect: iam.Effect.ALLOW,
+      actions: ['kms:Decrypt'],
+      resources: [this.encryptionKey.keyArn],
+    }));
+
     eventHandlerRole.addToPolicy(new iam.PolicyStatement({
       effect: iam.Effect.ALLOW,
       actions: [
@@ -281,6 +295,7 @@ export class ImaginifyStack extends cdk.Stack {
       environment: {
         TABLE_NAME: this.table.tableName,
         BUCKET_NAME: this.bucket.bucketName,
+        SECRET_NAME: this.secret.secretName,
       },
       logGroup: eventHandlerLogGroup,
     });
