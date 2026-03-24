@@ -1,17 +1,62 @@
-import { useState } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import type { BookSummary } from '../types/book';
 import { StatusBadge } from './StatusBadge';
 import { DeleteConfirmModal } from './DeleteConfirmModal';
+import { ProgressBar } from './ProgressBar';
 
 interface BookCardProps {
   book: BookSummary;
   onDelete: (bookId: string) => void;
 }
 
+function formatElapsedTime(seconds: number): string {
+  if (seconds < 0) return '0:00';
+  const mins = Math.floor(seconds / 60);
+  const secs = seconds % 60;
+  return `${mins}:${secs.toString().padStart(2, '0')}`;
+}
+
+function calculateElapsedSeconds(uploadTimestamp: string | null): number {
+  if (!uploadTimestamp) return 0;
+  const uploadTime = new Date(uploadTimestamp).getTime();
+  const now = Date.now();
+  return Math.floor((now - uploadTime) / 1000);
+}
+
 export function BookCard({ book, onDelete }: BookCardProps) {
   const [showDeleteModal, setShowDeleteModal] = useState(false);
+  const [elapsedSeconds, setElapsedSeconds] = useState(() =>
+    calculateElapsedSeconds(book.uploadTimestamp)
+  );
+  const timerRef = useRef<number | null>(null);
   const authors = book.authors ?? [];
   const genre = book.genre ?? [];
+
+  // Elapsed time timer for processing books - calculates from upload timestamp
+  useEffect(() => {
+    const isProcessing = book.processingStatus === 'PROCESSING' || book.processingStatus === 'PENDING_UPLOAD';
+
+    if (isProcessing) {
+      // Calculate initial elapsed time from upload timestamp
+      setElapsedSeconds(calculateElapsedSeconds(book.uploadTimestamp));
+
+      // Update every second
+      timerRef.current = window.setInterval(() => {
+        setElapsedSeconds(calculateElapsedSeconds(book.uploadTimestamp));
+      }, 1000);
+    } else if (timerRef.current) {
+      // Stop timer when processing completes
+      clearInterval(timerRef.current);
+      timerRef.current = null;
+    }
+
+    return () => {
+      if (timerRef.current) {
+        clearInterval(timerRef.current);
+        timerRef.current = null;
+      }
+    };
+  }, [book.processingStatus, book.uploadTimestamp]);
 
   const handleDeleteConfirm = () => {
     onDelete(book.bookId);
@@ -45,6 +90,20 @@ export function BookCard({ book, onDelete }: BookCardProps) {
       <p className="mb-4 text-xs text-text-muted">
         {book.pageCount > 0 ? `${book.pageCount} pages` : 'Page count unknown'}
       </p>
+
+      {(book.processingStatus === 'PROCESSING' || book.processingStatus === 'PENDING_UPLOAD') && (
+        <div className="mb-4">
+          {book.totalChapters > 0 && (
+            <ProgressBar current={book.processedChapters} total={book.totalChapters} />
+          )}
+          <div className="mt-2 flex items-center justify-center gap-2">
+            <div className="h-2 w-2 animate-pulse rounded-full bg-ethereal-400" />
+            <span className="text-sm font-medium text-text-secondary">
+              Elapsed: {formatElapsedTime(elapsedSeconds)}
+            </span>
+          </div>
+        </div>
+      )}
 
       <div className="mt-auto flex gap-2">
         <button

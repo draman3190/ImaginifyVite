@@ -5,6 +5,9 @@ export interface BookSummary {
   genre: string[] | null;
   pageCount: number;
   processingStatus: string;
+  totalChapters: number;
+  processedChapters: number;
+  uploadTimestamp: string | null;
 }
 
 export interface PresignedUploadUrlResponse {
