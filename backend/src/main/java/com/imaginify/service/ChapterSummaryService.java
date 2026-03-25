@@ -30,14 +30,19 @@ public class ChapterSummaryService {
     private static final String TYPE_TRANSITION = "TRANSITION";
 
     private static final String SUMMARIZATION_PROMPT_TEMPLATE = """
-            Write exactly 3 complete sentences summarizing this book chapter.
-            Focus on the main events and character actions.
-            Use present tense. Each sentence must end with a period.
+            Summarize this book chapter in exactly 3 sentences.
+
+            Rules:
+            - Write only the summary, nothing else
+            - Do not include any reasoning, thinking, or explanation
+            - Each sentence must be complete and end with a period
+            - Focus on main events and character actions
+            - Use present tense
 
             Chapter text:
             %s
 
-            Write your 3-sentence summary:""";
+            Summary:""";
 
     // Maximum characters of chapter text to send to the model
     private static final int MAX_CHAPTER_TEXT_FOR_MODEL = 15000;
@@ -123,6 +128,13 @@ public class ChapterSummaryService {
                     summary = summary.substring(8).trim();
                 }
 
+                // Validate the summary doesn't contain model reasoning artifacts
+                if (!isValidSummary(summary)) {
+                    log.warn("AI summary rejected - contains reasoning artifacts: {}",
+                            summary.substring(0, Math.min(100, summary.length())));
+                    return null;
+                }
+
                 // Truncate if too long
                 if (summary.length() > MAX_SUMMARY_LENGTH) {
                     summary = truncateToLength(summary, MAX_SUMMARY_LENGTH);
@@ -201,6 +213,42 @@ public class ChapterSummaryService {
         }
 
         return sentences;
+    }
+
+    /**
+     * Validate that a summary doesn't contain model reasoning artifacts.
+     * Returns false if the summary appears to be corrupted with thinking/reasoning.
+     */
+    private boolean isValidSummary(String summary) {
+        if (summary == null || summary.isBlank()) {
+            return false;
+        }
+
+        String lower = summary.toLowerCase();
+
+        // Check for common reasoning artifact patterns
+        if (lower.contains("[subject:") || lower.contains("[verb:")) {
+            return false;
+        }
+        if (lower.contains("let me") || lower.contains("i'll ") || lower.contains("i will")) {
+            return false;
+        }
+        if (lower.contains("double check") || lower.contains("one more check")) {
+            return false;
+        }
+        if (lower.contains("the prompt") || lower.contains("instructions")) {
+            return false;
+        }
+        if (lower.startsWith("1.") || lower.startsWith("step ")) {
+            return false;
+        }
+
+        // Summary should have at least one sentence ending with a period
+        if (!summary.contains(".")) {
+            return false;
+        }
+
+        return true;
     }
 
     /**

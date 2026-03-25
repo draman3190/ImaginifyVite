@@ -33,10 +33,11 @@ public class GeminiTextClient {
 
     // Model fallback order: try each in sequence
     // Model names from https://generativelanguage.googleapis.com/v1beta/models
+    // gemini-flash-latest often has better quota availability
     private static final List<String> MODEL_FALLBACK_ORDER = List.of(
-            "gemini-2.5-flash",
+            "gemini-flash-latest",
             "gemini-2.0-flash",
-            "gemini-flash-latest"
+            "gemini-2.5-flash"
     );
 
     // Initial wait time when rate limit is hit (15 RPM = 4 sec/request, use 5 sec buffer)
