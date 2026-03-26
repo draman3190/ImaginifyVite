@@ -8,6 +8,7 @@ export interface BookSummary {
   totalChapters: number;
   processedChapters: number;
   uploadTimestamp: string | null;
+  imageStatus: string | null; // NOT_STARTED, GENERATING, COMPLETED, FAILED
 }
 
 export interface PresignedUploadUrlResponse {
