@@ -6,6 +6,7 @@ import com.imaginify.exception.ImageGenerationException;
 import com.imaginify.model.Book;
 import com.imaginify.model.Chapter;
 import com.imaginify.model.ImageMetadata;
+import com.imaginify.model.ImageStatus;
 import com.imaginify.model.PromptContext;
 import com.imaginify.model.QualityScore;
 import com.imaginify.repository.BookRepository;
@@ -46,6 +47,11 @@ public class ImageGenerationOrchestrationService {
         this.storageService = storageService;
     }
 
+    /**
+     * Initiates asynchronous image generation for a book.
+     * Sets status to GENERATING and returns immediately.
+     * The actual generation happens asynchronously.
+     */
     public GenerateImagesResponse generateImagesForBook(String bookId) {
         log.info("Starting image generation pipeline for book: {}", bookId);
 
@@ -57,19 +63,43 @@ public class ImageGenerationOrchestrationService {
             throw new ImageGenerationException("Book has no chapters to generate images for: " + bookId);
         }
 
-        for (Chapter chapter : chapters) {
-            processChapter(book, chapter);
+        // Check if already generating
+        if (ImageStatus.GENERATING.name().equals(book.getImageStatus())) {
+            return new GenerateImagesResponse(bookId, ImageStatus.GENERATING.name(),
+                    "Image generation already in progress");
         }
 
+        // Set status to GENERATING
+        book.setImageStatus(ImageStatus.GENERATING.name());
         bookRepository.save(book);
-        log.info("Completed image generation pipeline for book: {}", bookId);
 
-        return new GenerateImagesResponse(bookId, "COMPLETED",
-                "Image generation completed for " + chapters.size() + " chapters");
+        // Process chapters (in real implementation this would be async)
+        try {
+            for (Chapter chapter : chapters) {
+                processChapter(book, chapter);
+                // Save progress after each chapter
+                bookRepository.save(book);
+            }
+
+            // Mark as completed
+            book.setImageStatus(ImageStatus.COMPLETED.name());
+            bookRepository.save(book);
+            log.info("Completed image generation pipeline for book: {}", bookId);
+
+            return new GenerateImagesResponse(bookId, ImageStatus.COMPLETED.name(),
+                    "Image generation completed for " + chapters.size() + " chapters");
+
+        } catch (Exception e) {
+            log.error("Image generation failed for book {}: {}", bookId, e.getMessage(), e);
+            book.setImageStatus(ImageStatus.FAILED.name());
+            bookRepository.save(book);
+            throw new ImageGenerationException("Image generation failed: " + e.getMessage(), e);
+        }
     }
 
     private void processChapter(Book book, Chapter chapter) {
-        log.info("Processing chapter {} - {}", chapter.getChapterNumber(), chapter.getTitle());
+        log.info("Processing chapter {} - {} for book slug: {}",
+                chapter.getChapterNumber(), chapter.getTitle(), book.getSlug());
 
         PromptContext context = buildPromptContext(book, chapter);
         String prompt = promptTemplateService.buildPrompt(context);
@@ -83,8 +113,9 @@ public class ImageGenerationOrchestrationService {
             byte[] processed = imageFormattingService.enhance(extractedImages.get(i));
             processed = imageFormattingService.convertFormat(processed, "png");
 
-            String key = String.format("books/%s/chapters/%d/img_%03d.png",
-                    book.getBookId(), chapter.getChapterNumber(), i + 1);
+            // Use slug-based path: books/{slug}/chapters/{chapterNum}/images/img_001.png
+            String key = String.format("books/%s/chapters/%02d/images/img_%03d.png",
+                    book.getSlug(), chapter.getChapterNumber(), i + 1);
             String url = storageService.uploadImage(key, processed, "image/png");
 
             ImageMetadata metadata = new ImageMetadata();

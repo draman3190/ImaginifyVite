@@ -11,6 +11,8 @@ export interface StageConfig {
   readonly lambdaReservedConcurrency?: number;
   readonly eventHandlerMemoryMb: number;
   readonly eventHandlerTimeoutSeconds: number;
+  readonly imageGenerationMemoryMb: number;
+  readonly imageGenerationTimeoutSeconds: number;
 }
 
 const ACCOUNT = '115417277634';
@@ -27,6 +29,8 @@ export const STAGE_CONFIGS: Record<string, StageConfig> = {
     lambdaTimeoutSeconds: 30,
     eventHandlerMemoryMb: 512,
     eventHandlerTimeoutSeconds: 900,  // 15 min for AI summarization with rate limit waits
+    imageGenerationMemoryMb: 1024,
+    imageGenerationTimeoutSeconds: 900,  // 15 min for image generation pipeline
   },
   gamma: {
     stageName: 'gamma',
@@ -39,6 +43,8 @@ export const STAGE_CONFIGS: Record<string, StageConfig> = {
     lambdaReservedConcurrency: 10,
     eventHandlerMemoryMb: 768,
     eventHandlerTimeoutSeconds: 900,  // 15 min for AI summarization with rate limit waits
+    imageGenerationMemoryMb: 1536,
+    imageGenerationTimeoutSeconds: 900,  // 15 min for image generation pipeline
   },
   prod: {
     stageName: 'prod',
@@ -50,5 +56,7 @@ export const STAGE_CONFIGS: Record<string, StageConfig> = {
     lambdaTimeoutSeconds: 30,
     eventHandlerMemoryMb: 1024,
     eventHandlerTimeoutSeconds: 900,  // 15 min for AI summarization with rate limit waits
+    imageGenerationMemoryMb: 2048,
+    imageGenerationTimeoutSeconds: 900,  // 15 min for image generation pipeline
   },
 };

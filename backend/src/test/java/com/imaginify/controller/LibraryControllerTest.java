@@ -36,7 +36,8 @@ class LibraryControllerTest {
     @Test
     void listBooks_returnsOk() throws Exception {
         BookSummaryResponse summary = new BookSummaryResponse(
-                "id-1", "Test Book", List.of("Author"), List.of("Fiction"), 200, "COMPLETED");
+                "id-1", "Test Book", List.of("Author"), List.of("Fiction"), 200, "COMPLETED",
+                10, 10, "2024-01-01T00:00:00Z", "NOT_STARTED");
         when(libraryService.listBooks()).thenReturn(List.of(summary));
 
         mockMvc.perform(get("/library/books"))
@@ -72,7 +73,8 @@ class LibraryControllerTest {
     @Test
     void searchBooks_returnsOk() throws Exception {
         BookSummaryResponse summary = new BookSummaryResponse(
-                "id-1", "Moby Dick", List.of("Melville"), List.of("Fiction"), 300, "COMPLETED");
+                "id-1", "Moby Dick", List.of("Melville"), List.of("Fiction"), 300, "COMPLETED",
+                12, 12, "2024-01-01T00:00:00Z", "NOT_STARTED");
         when(libraryService.searchBooks("moby")).thenReturn(List.of(summary));
 
         mockMvc.perform(get("/library/books/search").param("query", "moby"))

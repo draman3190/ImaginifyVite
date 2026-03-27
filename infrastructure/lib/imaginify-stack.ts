@@ -26,6 +26,7 @@ export class ImaginifyStack extends cdk.Stack {
   public readonly backendFunction: lambda.Function;
   public readonly httpApi: apigatewayv2.HttpApi;
   public readonly eventHandlerFunction: lambda.Function;
+  public readonly imageGenerationFunction: lambda.Function;
 
   constructor(scope: Construct, id: string, props: ImaginifyStackProps) {
     super(scope, id, props);
@@ -76,6 +77,8 @@ export class ImaginifyStack extends cdk.Stack {
         secretStringTemplate: JSON.stringify({
           geminiApiKey: 'PLACEHOLDER',
           grokApiKey: 'PLACEHOLDER',
+          togetherApiKey: 'PLACEHOLDER',
+          huggingFaceToken: 'PLACEHOLDER',
         }),
         generateStringKey: '_rotation_token',
       },
@@ -183,6 +186,7 @@ export class ImaginifyStack extends cdk.Stack {
         AWS_DYNAMODB_TABLE_NAME: this.table.tableName,
         AWS_S3_BUCKET_NAME: this.bucket.bucketName,
         AWS_SECRETSMANAGER_API_KEY_SECRET_ID: this.secret.secretName,
+        AWS_LAMBDA_IMAGE_GENERATION_FUNCTION_NAME: `imaginify-image-generation-${stage}`,
       },
       layers: [webAdapterLayer],
       logGroup,
@@ -306,6 +310,85 @@ export class ImaginifyStack extends cdk.Stack {
       new s3n.LambdaDestination(this.eventHandlerFunction),
       { prefix: 'books/', suffix: '.txt' },
     );
+
+    // --- Image Generation Lambda (async, invoked by backend) ---
+
+    // CloudWatch Log Group for image generation handler
+    const imageGenerationLogGroup = new logs.LogGroup(this, 'ImageGenerationLogGroup', {
+      logGroupName: `/aws/lambda/imaginify-image-generation-${stage}`,
+      retention: stage === 'prod'
+        ? logs.RetentionDays.SIX_MONTHS
+        : logs.RetentionDays.ONE_WEEK,
+      removalPolicy: stageConfig.removalPolicy,
+    });
+
+    // Dedicated IAM Role for image generation handler
+    const imageGenerationRole = new iam.Role(this, 'ImageGenerationRole', {
+      roleName: `imaginify-image-generation-role-${stage}`,
+      assumedBy: new iam.ServicePrincipal('lambda.amazonaws.com'),
+    });
+
+    imageGenerationRole.addToPolicy(new iam.PolicyStatement({
+      effect: iam.Effect.ALLOW,
+      actions: [
+        'dynamodb:GetItem',
+        'dynamodb:PutItem',
+      ],
+      resources: [this.table.tableArn],
+    }));
+
+    imageGenerationRole.addToPolicy(new iam.PolicyStatement({
+      effect: iam.Effect.ALLOW,
+      actions: ['s3:GetObject', 's3:PutObject'],
+      resources: [`${this.bucket.bucketArn}/books/*`],
+    }));
+
+    // Secrets Manager access for AI API keys
+    imageGenerationRole.addToPolicy(new iam.PolicyStatement({
+      effect: iam.Effect.ALLOW,
+      actions: ['secretsmanager:GetSecretValue'],
+      resources: [this.secret.secretArn],
+    }));
+
+    // KMS access to decrypt the secret
+    imageGenerationRole.addToPolicy(new iam.PolicyStatement({
+      effect: iam.Effect.ALLOW,
+      actions: ['kms:Decrypt'],
+      resources: [this.encryptionKey.keyArn],
+    }));
+
+    imageGenerationRole.addToPolicy(new iam.PolicyStatement({
+      effect: iam.Effect.ALLOW,
+      actions: [
+        'logs:CreateLogGroup',
+        'logs:CreateLogStream',
+        'logs:PutLogEvents',
+      ],
+      resources: [
+        imageGenerationLogGroup.logGroupArn,
+        `${imageGenerationLogGroup.logGroupArn}:*`,
+      ],
+    }));
+
+    // Image generation Lambda Function
+    this.imageGenerationFunction = new lambda.Function(this, 'ImageGenerationFunction', {
+      functionName: `imaginify-image-generation-${stage}`,
+      runtime: lambda.Runtime.JAVA_21,
+      handler: 'com.imaginify.handler.ImageGenerationEventHandler::handleRequest',
+      code: lambda.Code.fromAsset(path.join(__dirname, '../../backend/build/image-generation-handler/image-generation-handler.zip')),
+      memorySize: stageConfig.imageGenerationMemoryMb,
+      timeout: cdk.Duration.seconds(stageConfig.imageGenerationTimeoutSeconds),
+      role: imageGenerationRole,
+      environment: {
+        TABLE_NAME: this.table.tableName,
+        BUCKET_NAME: this.bucket.bucketName,
+        SECRET_NAME: this.secret.secretName,
+      },
+      logGroup: imageGenerationLogGroup,
+    });
+
+    // Grant backend Lambda permission to invoke image generation Lambda
+    this.imageGenerationFunction.grantInvoke(this.backendRole);
 
     // Output the API Gateway URL
     new cdk.CfnOutput(this, 'ApiUrl', {

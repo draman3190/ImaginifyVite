@@ -11,6 +11,7 @@ import com.imaginify.model.Book;
 import com.imaginify.model.Chapter;
 import com.imaginify.model.TextChapter;
 import com.imaginify.model.TextMetadata;
+import com.imaginify.model.ImageStatus;
 import com.imaginify.model.ProcessingStatus;
 import com.imaginify.repository.BookRepository;
 import com.imaginify.util.ChapterTypeDetector;
@@ -122,6 +123,7 @@ public class LibraryService {
         book.setBookId(bookId);
         book.setTitle(filename);
         book.setProcessingStatus(ProcessingStatus.PENDING_UPLOAD.name());
+        book.setImageStatus(ImageStatus.NOT_STARTED.name());
         book.setUploadTimestamp(Instant.now().toString());
         book.setChapters(new ArrayList<>());
 
@@ -264,7 +266,8 @@ public class LibraryService {
                 book.getProcessingStatus(),
                 totalChapters,
                 processedChapters,
-                book.getUploadTimestamp());
+                book.getUploadTimestamp(),
+                book.getImageStatus());
     }
 
     private BookResponse toResponse(Book book) {

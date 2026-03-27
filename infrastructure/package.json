@@ -4,7 +4,7 @@
   "private": true,
   "scripts": {
     "build": "tsc",
-    "build:backend": "cd ../backend && ./gradlew packageLambda packageEventHandler",
+    "build:backend": "cd ../backend && ./gradlew packageLambda packageEventHandler packageImageGenerationHandler",
     "pretest": "npm run build:backend",
     "test": "jest --config jest.config.js",
     "synth": "npx cdk synth",

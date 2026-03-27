@@ -2,7 +2,7 @@ package com.imaginify.controller;
 
 import com.imaginify.dto.request.GenerateImagesRequest;
 import com.imaginify.dto.response.GenerateImagesResponse;
-import com.imaginify.service.ImageGenerationOrchestrationService;
+import com.imaginify.service.ImageGenerationTriggerService;
 import jakarta.validation.Valid;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -18,17 +18,21 @@ public class ImageGenerationController {
 
     private static final Logger log = LoggerFactory.getLogger(ImageGenerationController.class);
 
-    private final ImageGenerationOrchestrationService orchestrationService;
+    private final ImageGenerationTriggerService triggerService;
 
-    public ImageGenerationController(ImageGenerationOrchestrationService orchestrationService) {
-        this.orchestrationService = orchestrationService;
+    public ImageGenerationController(ImageGenerationTriggerService triggerService) {
+        this.triggerService = triggerService;
     }
 
+    /**
+     * Triggers asynchronous image generation for a book.
+     * Returns immediately with GENERATING status while processing happens in background Lambda.
+     */
     @PostMapping("/generate")
     public ResponseEntity<GenerateImagesResponse> generateImages(
             @Valid @RequestBody GenerateImagesRequest request) {
         log.info("Received image generation request for book: {}", request.bookId());
-        GenerateImagesResponse response = orchestrationService.generateImagesForBook(request.bookId());
-        return ResponseEntity.ok(response);
+        GenerateImagesResponse response = triggerService.triggerImageGeneration(request.bookId());
+        return ResponseEntity.accepted().body(response);
     }
 }

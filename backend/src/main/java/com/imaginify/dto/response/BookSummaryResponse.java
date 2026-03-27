@@ -11,5 +11,6 @@ public record BookSummaryResponse(
         String processingStatus,
         int totalChapters,
         int processedChapters,
-        String uploadTimestamp
+        String uploadTimestamp,
+        String imageStatus
 ) {}

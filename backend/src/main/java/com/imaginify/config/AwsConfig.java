@@ -7,6 +7,7 @@ import software.amazon.awssdk.http.urlconnection.UrlConnectionHttpClient;
 import software.amazon.awssdk.regions.Region;
 import software.amazon.awssdk.services.s3.S3Client;
 import software.amazon.awssdk.services.s3.presigner.S3Presigner;
+import software.amazon.awssdk.services.lambda.LambdaClient;
 import software.amazon.awssdk.services.secretsmanager.SecretsManagerClient;
 
 @Configuration
@@ -33,6 +34,14 @@ public class AwsConfig {
     @Bean
     public SecretsManagerClient secretsManagerClient() {
         return SecretsManagerClient.builder()
+                .region(Region.of(region))
+                .httpClient(UrlConnectionHttpClient.create())
+                .build();
+    }
+
+    @Bean
+    public LambdaClient lambdaClient() {
+        return LambdaClient.builder()
                 .region(Region.of(region))
                 .httpClient(UrlConnectionHttpClient.create())
                 .build();

@@ -78,13 +78,18 @@ class BookUploadEventHandlerTest {
 
         assertEquals("OK", result);
 
-        // First putItem is the conditional claim (PROCESSING), second is the final save (COMPLETED)
+        // Handler saves progress incrementally:
+        // 1 conditional putItem (PROCESSING), 1 initial save with chapter count,
+        // N saves after each chapter summary, 1 final save (COMPLETED)
+        // For 2 chapters: 1 conditional + 4 Book saves = 5 total
         ArgumentCaptor<PutItemEnhancedRequest<Book>> requestCaptor = ArgumentCaptor.forClass(PutItemEnhancedRequest.class);
         ArgumentCaptor<Book> bookCaptor = ArgumentCaptor.forClass(Book.class);
         verify(bookTable, times(1)).putItem(requestCaptor.capture());
-        verify(bookTable, times(1)).putItem(bookCaptor.capture());
+        verify(bookTable, times(4)).putItem(bookCaptor.capture());
 
-        Book savedBook = bookCaptor.getValue();
+        // Get the final saved book (last capture)
+        List<Book> capturedBooks = bookCaptor.getAllValues();
+        Book savedBook = capturedBooks.get(capturedBooks.size() - 1);
         assertEquals(ProcessingStatus.COMPLETED.name(), savedBook.getProcessingStatus());
         assertEquals("My Great Book", savedBook.getTitle());
         assertEquals("my-great-book", savedBook.getSlug());
@@ -199,9 +204,11 @@ class BookUploadEventHandlerTest {
 
         handler.handleRequest(event, context);
 
+        // For single chapter: 1 conditional + 3 Book saves (initial, chapter summary, final)
         ArgumentCaptor<Book> bookCaptor = ArgumentCaptor.forClass(Book.class);
-        verify(bookTable, times(1)).putItem(bookCaptor.capture());
-        Book savedBook = bookCaptor.getValue();
+        verify(bookTable, times(3)).putItem(bookCaptor.capture());
+        List<Book> capturedBooks = bookCaptor.getAllValues();
+        Book savedBook = capturedBooks.get(capturedBooks.size() - 1);
         assertEquals(ProcessingStatus.COMPLETED.name(), savedBook.getProcessingStatus());
         assertEquals(1, savedBook.getChapters().size());
         assertEquals("Full Text", savedBook.getChapters().get(0).getTitle());

@@ -15,6 +15,8 @@ aws:
     presigned-url-expiration-minutes: 15
   secrets-manager:
     api-key-secret-id: imaginify/api-keys
+  lambda:
+    image-generation-function-name: ""
 
 management:
   endpoints:

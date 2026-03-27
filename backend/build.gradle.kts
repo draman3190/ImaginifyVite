@@ -30,6 +30,7 @@ dependencies {
     implementation("software.amazon.awssdk:dynamodb-enhanced")
     implementation("software.amazon.awssdk:s3")
     implementation("software.amazon.awssdk:secretsmanager")
+    implementation("software.amazon.awssdk:lambda")
     implementation("software.amazon.awssdk:url-connection-client")
 
     implementation("com.fasterxml.jackson.datatype:jackson-datatype-jsr310")
@@ -82,6 +83,14 @@ tasks.register<Zip>("packageEventHandler") {
     dependsOn("classes")
     archiveFileName.set("event-handler.zip")
     destinationDirectory.set(layout.buildDirectory.dir("event-handler"))
+    from(sourceSets.main.get().output.classesDirs)
+    into("lib") { from(eventHandlerDeps) }
+}
+
+tasks.register<Zip>("packageImageGenerationHandler") {
+    dependsOn("classes")
+    archiveFileName.set("image-generation-handler.zip")
+    destinationDirectory.set(layout.buildDirectory.dir("image-generation-handler"))
     from(sourceSets.main.get().output.classesDirs)
     into("lib") { from(eventHandlerDeps) }
 }

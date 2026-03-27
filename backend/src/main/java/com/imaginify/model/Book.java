@@ -25,6 +25,7 @@ public class Book {
     private String description;
     private String tone;           // Overall tone/mood of the book (e.g., "dark and suspenseful", "whimsical")
     private String artStyle;       // Preferred art style for illustrations (e.g., "watercolor", "comic panel")
+    private String imageStatus;    // NOT_STARTED, GENERATING, COMPLETED, FAILED
     private List<Chapter> chapters;
 
     @DynamoDbPartitionKey
@@ -155,6 +156,14 @@ public class Book {
 
     public void setArtStyle(String artStyle) {
         this.artStyle = artStyle;
+    }
+
+    public String getImageStatus() {
+        return imageStatus;
+    }
+
+    public void setImageStatus(String imageStatus) {
+        this.imageStatus = imageStatus;
     }
 
     public List<Chapter> getChapters() {
