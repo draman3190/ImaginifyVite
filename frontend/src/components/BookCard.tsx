@@ -87,12 +87,12 @@ export function BookCard({ book, onDelete }: BookCardProps) {
         </div>
       )}
 
-      <p className="mb-4 text-xs text-text-muted">
+      <p className="text-xs text-text-muted">
         {book.pageCount > 0 ? `${book.pageCount} pages` : 'Page count unknown'}
       </p>
 
       {(book.processingStatus === 'PROCESSING' || book.processingStatus === 'PENDING_UPLOAD') && (
-        <div className="mb-4">
+        <div className="mt-4">
           {book.totalChapters > 0 && (
             <ProgressBar current={book.processedChapters} total={book.totalChapters} />
           )}
@@ -105,17 +105,10 @@ export function BookCard({ book, onDelete }: BookCardProps) {
         </div>
       )}
 
-      <div className="mt-auto flex gap-2">
-        <button
-          disabled
-          title="Coming soon"
-          className="flex-1 rounded-lg border border-border-subtle bg-raised/50 px-3 py-2 text-sm font-medium text-text-muted cursor-not-allowed"
-        >
-          Download Images
-        </button>
+      <div className="mt-4">
         <button
           onClick={() => setShowDeleteModal(true)}
-          className="cursor-pointer rounded-lg border border-red-500/20 px-3 py-2 text-sm font-medium text-red-400 hover:bg-red-500/10 hover:border-red-500/30 transition-colors"
+          className="w-full cursor-pointer rounded-lg border border-red-500/20 px-3 py-2 text-sm font-medium text-red-400 hover:bg-red-500/10 hover:border-red-500/30 transition-colors"
         >
           Delete
         </button>

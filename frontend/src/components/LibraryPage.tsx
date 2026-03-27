@@ -136,22 +136,22 @@ function StatusPill({ status }: { status: string }) {
   const getStatusStyle = () => {
     switch (status) {
       case 'COMPLETED':
-        return 'bg-green-500/20 text-green-400 border-green-500/30';
+        return 'bg-emerald-500/15 text-emerald-300 border-emerald-500/30';
       case 'PROCESSING':
-        return 'bg-yellow-500/20 text-yellow-400 border-yellow-500/30';
+        return 'bg-amber-500/15 text-amber-300 border-amber-500/30';
       case 'PENDING_UPLOAD':
-        return 'bg-blue-500/20 text-blue-400 border-blue-500/30';
+        return 'bg-sky-500/15 text-sky-300 border-sky-500/30';
       case 'FAILED':
-        return 'bg-red-500/20 text-red-400 border-red-500/30';
+        return 'bg-rose-500/15 text-rose-300 border-rose-500/30';
       default:
-        return 'bg-gray-500/20 text-gray-400 border-gray-500/30';
+        return 'bg-gray-500/15 text-gray-400 border-gray-500/30';
     }
   };
 
   const getStatusLabel = () => {
     switch (status) {
       case 'COMPLETED':
-        return 'Ready to Read';
+        return 'Ready';
       case 'PROCESSING':
         return 'Analyzing...';
       case 'PENDING_UPLOAD':
@@ -218,11 +218,11 @@ function ImageStatusCell({ bookId, imageStatus, isBookReady, onGenerateStarted }
   // Show status based on imageStatus field from server
   if (imageStatus === 'COMPLETED') {
     return (
-      <span className="inline-flex items-center gap-1 text-xs text-green-400">
-        <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+      <span className="inline-flex items-center gap-1.5 text-xs text-emerald-300">
+        <svg className="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M5 13l4 4L19 7" />
         </svg>
-        Ready
+        Done
       </span>
     );
   }
