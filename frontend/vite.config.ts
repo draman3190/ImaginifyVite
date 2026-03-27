@@ -7,7 +7,7 @@ export default defineConfig({
   plugins: [react(), tailwindcss()],
   server: {
     proxy: {
-      '/library': 'http://localhost:8080',
+      '/library/books': 'http://localhost:8080',
       '/images': 'http://localhost:8080',
     },
   },
