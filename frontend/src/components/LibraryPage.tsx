@@ -1,11 +1,13 @@
-import { useState } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { useBooks } from '../hooks/useBooks';
 import { generateImages } from '../api/imageApi';
 
 export function LibraryPage() {
-  const { books, loading, error, refresh } = useBooks();
+  const { books, loading, error, refresh, silentRefresh } = useBooks();
 
-  if (loading) {
+  // Note: useBooks hook automatically polls when imageStatus === 'GENERATING'
+
+  if (loading && books.length === 0) {
     return (
       <div className="flex justify-center py-20">
         <div className="spinner-enchanted h-8 w-8 animate-spin rounded-full border-4" />
@@ -13,7 +15,7 @@ export function LibraryPage() {
     );
   }
 
-  if (error) {
+  if (error && books.length === 0) {
     return (
       <div className="flex flex-col items-center py-20 text-center">
         <p className="mb-4 text-sm text-red-400">{error}</p>
@@ -118,6 +120,7 @@ export function LibraryPage() {
                     bookId={book.bookId}
                     imageStatus={book.imageStatus}
                     isBookReady={book.processingStatus === 'COMPLETED'}
+                    onGenerateStarted={silentRefresh}
                   />
                 </td>
               </tr>
@@ -171,26 +174,37 @@ interface ImageStatusCellProps {
   bookId: string;
   imageStatus: string | null;
   isBookReady: boolean;
+  onGenerateStarted: () => void;
 }
 
-function ImageStatusCell({ bookId, imageStatus, isBookReady }: ImageStatusCellProps) {
-  const [isGenerating, setIsGenerating] = useState(false);
+function ImageStatusCell({ bookId, imageStatus, isBookReady, onGenerateStarted }: ImageStatusCellProps) {
+  const [localStatus, setLocalStatus] = useState<'idle' | 'requesting' | 'started' | 'error'>('idle');
   const [error, setError] = useState<string | null>(null);
 
-  const handleGenerate = async () => {
-    setIsGenerating(true);
+  // Reset local state when imageStatus from server changes
+  useEffect(() => {
+    if (imageStatus === 'GENERATING' || imageStatus === 'COMPLETED' || imageStatus === 'FAILED') {
+      setLocalStatus('idle');
+    }
+  }, [imageStatus]);
+
+  const handleGenerate = useCallback(async () => {
+    if (localStatus === 'requesting' || localStatus === 'started') return;
+
+    setLocalStatus('requesting');
     setError(null);
+
     try {
       await generateImages(bookId);
-      // The actual status update will come from polling or page refresh
-      // For now, we just show that the request was sent
+      setLocalStatus('started');
+      // Trigger refresh to get updated status from server
+      onGenerateStarted();
     } catch (err) {
+      setLocalStatus('error');
       setError('Failed to start');
       console.error('Failed to generate images:', err);
-    } finally {
-      setIsGenerating(false);
     }
-  };
+  }, [bookId, localStatus, onGenerateStarted]);
 
   // If book is still processing, images can't be generated yet
   if (!isBookReady) {
@@ -201,7 +215,7 @@ function ImageStatusCell({ bookId, imageStatus, isBookReady }: ImageStatusCellPr
     );
   }
 
-  // Show status based on imageStatus field
+  // Show status based on imageStatus field from server
   if (imageStatus === 'COMPLETED') {
     return (
       <span className="inline-flex items-center gap-1 text-xs text-green-400">
@@ -213,7 +227,8 @@ function ImageStatusCell({ bookId, imageStatus, isBookReady }: ImageStatusCellPr
     );
   }
 
-  if (imageStatus === 'GENERATING' || isGenerating) {
+  // Show generating state from server OR local optimistic state
+  if (imageStatus === 'GENERATING' || localStatus === 'started') {
     return (
       <span className="inline-flex items-center gap-1 text-xs text-yellow-400">
         <div className="h-3 w-3 animate-spin rounded-full border-2 border-yellow-400 border-t-transparent" />
@@ -222,7 +237,17 @@ function ImageStatusCell({ bookId, imageStatus, isBookReady }: ImageStatusCellPr
     );
   }
 
-  if (imageStatus === 'FAILED' || error) {
+  // Show requesting state (API call in progress)
+  if (localStatus === 'requesting') {
+    return (
+      <span className="inline-flex items-center gap-1 text-xs text-blue-400">
+        <div className="h-3 w-3 animate-spin rounded-full border-2 border-blue-400 border-t-transparent" />
+        Starting...
+      </span>
+    );
+  }
+
+  if (imageStatus === 'FAILED' || localStatus === 'error') {
     return (
       <div className="flex flex-col items-center gap-1">
         <span className="text-xs text-red-400">{error || 'Failed'}</span>
@@ -240,7 +265,7 @@ function ImageStatusCell({ bookId, imageStatus, isBookReady }: ImageStatusCellPr
   return (
     <button
       onClick={handleGenerate}
-      disabled={isGenerating}
+      disabled={localStatus !== 'idle'}
       className="rounded bg-cosmic-500/20 px-3 py-1 text-xs font-medium text-cosmic-400 border border-cosmic-500/30 hover:bg-cosmic-500/30 transition-colors disabled:opacity-50"
     >
       Generate

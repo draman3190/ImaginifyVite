@@ -7,6 +7,7 @@ interface UseBooksResult {
   loading: boolean;
   error: string | null;
   refresh: () => void;
+  silentRefresh: () => void;
   deleteBook: (bookId: string) => Promise<void>;
 }
 
@@ -38,10 +39,12 @@ export function useBooks(): UseBooksResult {
     refresh();
   }, [refresh]);
 
-  // Poll for updates while any book is processing
+  // Poll for updates while any book is processing or generating images
   useEffect(() => {
     const hasProcessingBooks = books.some(
-      (book) => book.processingStatus === 'PROCESSING' || book.processingStatus === 'PENDING_UPLOAD'
+      (book) => book.processingStatus === 'PROCESSING' ||
+                book.processingStatus === 'PENDING_UPLOAD' ||
+                book.imageStatus === 'GENERATING'
     );
 
     if (hasProcessingBooks && !pollIntervalRef.current) {
@@ -71,5 +74,5 @@ export function useBooks(): UseBooksResult {
     }
   }, [refresh]);
 
-  return { books, loading, error, refresh, deleteBook };
+  return { books, loading, error, refresh, silentRefresh, deleteBook };
 }

@@ -11,6 +11,7 @@ PROJECT_ROOT="$(cd "$(dirname "$0")" && pwd)"
 TABLE_NAME="imaginify-books-${STAGE}"
 BUCKET_NAME="imaginify-images-${STAGE}-115417277634"
 SECRET_ID="imaginify/api-keys-${STAGE}"
+IMAGE_GEN_LAMBDA="imaginify-image-generation-${STAGE}"
 
 echo "Starting Imaginify development environment (stage: ${STAGE})"
 echo "=============================================="
@@ -33,7 +34,7 @@ trap cleanup SIGINT SIGTERM
 # Start backend
 echo "Starting backend on port 8080..."
 cd "$PROJECT_ROOT/backend"
-./gradlew bootRun --args="--aws.dynamodb.table-name=${TABLE_NAME} --aws.s3.bucket-name=${BUCKET_NAME} --aws.secrets-manager.api-key-secret-id=${SECRET_ID}" &
+./gradlew bootRun --args="--aws.dynamodb.table-name=${TABLE_NAME} --aws.s3.bucket-name=${BUCKET_NAME} --aws.secrets-manager.api-key-secret-id=${SECRET_ID} --aws.lambda.image-generation-function-name=${IMAGE_GEN_LAMBDA}" &
 BACKEND_PID=$!
 
 # Wait for backend to be healthy
