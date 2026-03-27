@@ -74,24 +74,30 @@ public class ImageGenerationEventHandler implements RequestHandler<Map<String, S
 
         // Initialize services
         this.promptTemplateService = new PromptTemplateService();
-        this.qualityAssuranceService = new QualityAssuranceService();
         this.imageFormattingService = new ImageFormattingService();
 
-        // Initialize Hugging Face client for image generation (FLUX model)
-        AiImageGenerationClient client = null;
+        // Initialize clients that require Secrets Manager
+        AiImageGenerationClient imageClient = null;
+
         if (secretName != null && !secretName.isBlank()) {
             try {
                 SecretsManagerClient secretsClient = SecretsManagerClient.builder()
                         .httpClient(UrlConnectionHttpClient.create())
                         .build();
-                client = new HuggingFaceImageClient(secretsClient, secretName);
+
+                // Initialize Hugging Face client for image generation (FLUX model)
+                imageClient = new HuggingFaceImageClient(secretsClient, secretName);
                 log.info("Hugging Face image generation client initialized, configured: {}",
-                        ((HuggingFaceImageClient) client).isConfigured());
+                        ((HuggingFaceImageClient) imageClient).isConfigured());
+
             } catch (Exception e) {
-                log.warn("Failed to initialize Hugging Face client", e);
+                log.warn("Failed to initialize API clients", e);
             }
         }
-        this.imageGenerationClient = client;
+
+        this.imageGenerationClient = imageClient;
+        // Use Layers 1-2 QA only (AI verification disabled until reliable free API available)
+        this.qualityAssuranceService = new QualityAssuranceService();
     }
 
     // Test constructor for dependency injection
