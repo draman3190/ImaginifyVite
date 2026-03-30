@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback, useMemo } from 'react';
+import { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import { fetchBookDetail, fetchChapterContent } from '../api/readerApi';
 import type { BookDetail, ChapterContent, ChapterSummary } from '../types/book';
 
@@ -24,7 +24,6 @@ function splitIntoPages(text: string): string[] {
       currentPage += (currentPage ? '\n\n' : '') + paragraph.trim();
       currentWordCount += paragraphWordCount;
     } else if (currentWordCount === 0) {
-      // Paragraph is larger than page limit, split by sentences
       const sentences = paragraph.match(/[^.!?]+[.!?]+/g) || [paragraph];
       for (const sentence of sentences) {
         const sentenceWords = sentence.trim().split(/\s+/).filter(Boolean);
@@ -42,7 +41,6 @@ function splitIntoPages(text: string): string[] {
         }
       }
     } else {
-      // Start new page with this paragraph
       pages.push(currentPage);
       currentPage = paragraph.trim();
       currentWordCount = paragraphWordCount;
@@ -65,12 +63,74 @@ export function ChapterReader({ bookId, initialChapter, onBack }: ChapterReaderP
   const [error, setError] = useState<string | null>(null);
   const [showChapterDropdown, setShowChapterDropdown] = useState(false);
 
+  // Progress bar animation state
+  const [displayedProgress, setDisplayedProgress] = useState(0);
+  const targetProgressRef = useRef(0);
+  const animationFrameRef = useRef<number>();
+
+  // Guard against duplicate chapter loads
+  const loadingChapterRef = useRef<number | null>(null);
+
+  // Refs for values needed in navigation callbacks (avoid stale closures)
+  const currentChapterRef = useRef(currentChapter);
+  const chapterRef = useRef(chapter);
+  const totalPagesRef = useRef(1);
+
+  // Keep refs in sync
+  currentChapterRef.current = currentChapter;
+  chapterRef.current = chapter;
+
   const pages = useMemo(() => {
     if (!chapter?.content) return [''];
     return splitIntoPages(chapter.content);
   }, [chapter?.content]);
 
   const totalPages = pages.length;
+  totalPagesRef.current = totalPages;
+
+  // Calculate actual progress
+  const actualProgress = chapter
+    ? ((currentChapter - 1) / chapter.totalChapters) * 100 +
+      ((currentPage + 1) / totalPages / chapter.totalChapters) * 100
+    : 0;
+
+  // Update target progress - only allow forward or significant backward (chapter change)
+  useEffect(() => {
+    const current = targetProgressRef.current;
+    // Allow forward progress, or allow reset if it's a big jump back (new chapter)
+    if (actualProgress > current || actualProgress < current - 10) {
+      targetProgressRef.current = actualProgress;
+    }
+  }, [actualProgress]);
+
+  // RAF animation loop for smooth progress bar
+  useEffect(() => {
+    const animate = () => {
+      const target = targetProgressRef.current;
+
+      setDisplayedProgress(prev => {
+        const diff = target - prev;
+
+        // Snap if very close
+        if (Math.abs(diff) < 0.1) {
+          return target;
+        }
+
+        // Smooth chase at ~70% speed
+        return prev + diff * 0.12;
+      });
+
+      animationFrameRef.current = requestAnimationFrame(animate);
+    };
+
+    animationFrameRef.current = requestAnimationFrame(animate);
+
+    return () => {
+      if (animationFrameRef.current) {
+        cancelAnimationFrame(animationFrameRef.current);
+      }
+    };
+  }, []);
 
   const loadBook = useCallback(async () => {
     try {
@@ -83,18 +143,37 @@ export function ChapterReader({ bookId, initialChapter, onBack }: ChapterReaderP
 
   const loadChapter = useCallback(
     async (chapterNum: number) => {
+      // Prevent duplicate loads of the same chapter
+      if (loadingChapterRef.current === chapterNum) {
+        return;
+      }
+      loadingChapterRef.current = chapterNum;
+
       try {
         setLoading(true);
         setError(null);
         const chapterData = await fetchChapterContent(bookId, chapterNum);
-        setChapter(chapterData);
-        setCurrentChapter(chapterNum);
-        setCurrentPage(0);
-        window.history.replaceState({}, '', `/reader/${bookId}/${chapterNum}`);
+
+        // Only apply if this is still the chapter we want
+        if (loadingChapterRef.current === chapterNum) {
+          setChapter(chapterData);
+          setCurrentChapter(chapterNum);
+          setCurrentPage(0);
+          // Reset progress target for new chapter
+          targetProgressRef.current =
+            ((chapterNum - 1) / chapterData.totalChapters) * 100 +
+            (1 / chapterData.totalChapters) * 100 / 10; // Approximate first page
+          window.history.replaceState({}, '', `/reader/${bookId}/${chapterNum}`);
+        }
       } catch (err) {
-        setError(err instanceof Error ? err.message : 'Failed to load chapter');
+        if (loadingChapterRef.current === chapterNum) {
+          setError(err instanceof Error ? err.message : 'Failed to load chapter');
+        }
       } finally {
-        setLoading(false);
+        if (loadingChapterRef.current === chapterNum) {
+          setLoading(false);
+          loadingChapterRef.current = null;
+        }
       }
     },
     [bookId]
@@ -106,20 +185,31 @@ export function ChapterReader({ bookId, initialChapter, onBack }: ChapterReaderP
   }, [loadBook, loadChapter, initialChapter]);
 
   const goToNextPage = useCallback(() => {
-    if (currentPage < totalPages - 1) {
-      setCurrentPage((p) => p + 1);
-    } else if (chapter?.hasNext) {
-      loadChapter(currentChapter + 1);
-    }
-  }, [currentPage, totalPages, chapter?.hasNext, currentChapter, loadChapter]);
+    setCurrentPage(prev => {
+      const total = totalPagesRef.current;
+      if (prev < total - 1) {
+        return prev + 1;
+      }
+      // At last page, trigger chapter load if available
+      if (chapterRef.current?.hasNext && loadingChapterRef.current === null) {
+        loadChapter(currentChapterRef.current + 1);
+      }
+      return prev;
+    });
+  }, [loadChapter]);
 
   const goToPrevPage = useCallback(() => {
-    if (currentPage > 0) {
-      setCurrentPage((p) => p - 1);
-    } else if (chapter?.hasPrevious) {
-      loadChapter(currentChapter - 1);
-    }
-  }, [currentPage, chapter?.hasPrevious, currentChapter, loadChapter]);
+    setCurrentPage(prev => {
+      if (prev > 0) {
+        return prev - 1;
+      }
+      // At first page, trigger chapter load if available
+      if (chapterRef.current?.hasPrevious && loadingChapterRef.current === null) {
+        loadChapter(currentChapterRef.current - 1);
+      }
+      return prev;
+    });
+  }, [loadChapter]);
 
   const handleChapterSelect = (chapterNum: number) => {
     setShowChapterDropdown(false);
@@ -174,11 +264,6 @@ export function ChapterReader({ bookId, initialChapter, onBack }: ChapterReaderP
       </div>
     );
   }
-
-  const overallProgress = chapter
-    ? ((currentChapter - 1) / chapter.totalChapters) * 100 +
-      ((currentPage + 1) / totalPages / chapter.totalChapters) * 100
-    : 0;
 
   return (
     <div className="flex flex-col h-[calc(100vh-12rem)]">
@@ -281,8 +366,8 @@ export function ChapterReader({ bookId, initialChapter, onBack }: ChapterReaderP
         <div className="mb-4">
           <div className="h-1 bg-white/10 rounded-full overflow-hidden">
             <div
-              className="h-full bg-gradient-to-r from-ethereal-500 to-cosmic-500 transition-all duration-300"
-              style={{ width: `${overallProgress}%` }}
+              className="h-full bg-gradient-to-r from-ethereal-500 to-cosmic-500"
+              style={{ width: `${displayedProgress}%` }}
             />
           </div>
         </div>
