@@ -4,6 +4,7 @@ import { TabNavigation } from './TabNavigation';
 const TABS = [
   { id: 'my-books', label: 'My Books' },
   { id: 'library', label: 'Library' },
+  { id: 'reader', label: 'Reader' },
 ];
 
 interface LayoutProps {

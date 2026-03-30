@@ -3,6 +3,7 @@ package com.imaginify.controller;
 import com.imaginify.dto.request.UploadBookRequest;
 import com.imaginify.dto.response.BookResponse;
 import com.imaginify.dto.response.BookSummaryResponse;
+import com.imaginify.dto.response.ChapterContentResponse;
 import com.imaginify.dto.response.PresignedDownloadUrlResponse;
 import com.imaginify.dto.response.PresignedUploadUrlResponse;
 import com.imaginify.service.LibraryService;
@@ -81,6 +82,15 @@ public class LibraryController {
     public ResponseEntity<PresignedDownloadUrlResponse> getDownloadUrl(@PathVariable String bookId) {
         log.info("Received download URL request for book: {}", bookId);
         PresignedDownloadUrlResponse response = libraryService.getDownloadUrl(bookId);
+        return ResponseEntity.ok(response);
+    }
+
+    @GetMapping("/{bookId}/chapters/{chapterNumber}")
+    public ResponseEntity<ChapterContentResponse> getChapterContent(
+            @PathVariable String bookId,
+            @PathVariable int chapterNumber) {
+        log.info("Received chapter content request: bookId={}, chapter={}", bookId, chapterNumber);
+        ChapterContentResponse response = libraryService.getChapterContent(bookId, chapterNumber);
         return ResponseEntity.ok(response);
     }
 }

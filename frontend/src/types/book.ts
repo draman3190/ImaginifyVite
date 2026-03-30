@@ -23,3 +23,32 @@ export interface GenerateImagesResponse {
   status: string;
   message: string;
 }
+
+export interface ChapterSummary {
+  chapterNumber: number;
+  title: string;
+  chapterType: string;
+  textLength: number;
+}
+
+export interface BookDetail {
+  bookId: string;
+  title: string;
+  authors: string[] | null;
+  language: string | null;
+  genre: string[] | null;
+  processingStatus: string;
+  chapters: ChapterSummary[];
+}
+
+export interface ChapterContent {
+  bookId: string;
+  chapterNumber: number;
+  title: string;
+  chapterType: string;
+  content: string;
+  textLength: number;
+  totalChapters: number;
+  hasPrevious: boolean;
+  hasNext: boolean;
+}

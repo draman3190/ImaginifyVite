@@ -2,11 +2,13 @@ import { useState, useEffect } from 'react';
 import { Layout } from './Layout';
 import { MyBooksPage } from './MyBooksPage';
 import { LibraryPage } from './LibraryPage';
+import { ReaderPage } from './ReaderPage';
 import { UploadBookModal } from './UploadBookModal';
 
 function getTabFromPath(): string {
   const path = window.location.pathname;
   if (path === '/library') return 'library';
+  if (path.startsWith('/reader')) return 'reader';
   if (path === '/books' || path === '/') return 'my-books';
   return 'my-books';
 }
@@ -18,7 +20,9 @@ export function BookLibrary() {
 
   // Sync URL with tab state
   const handleTabChange = (tab: string) => {
-    const newPath = tab === 'library' ? '/library' : '/books';
+    let newPath = '/books';
+    if (tab === 'library') newPath = '/library';
+    else if (tab === 'reader') newPath = '/reader';
     window.history.pushState({}, '', newPath);
     setActiveTab(tab);
   };
@@ -46,6 +50,7 @@ export function BookLibrary() {
           <MyBooksPage onUpload={() => setShowUpload(true)} refreshTrigger={refreshTrigger} />
         )}
         {activeTab === 'library' && <LibraryPage />}
+        {activeTab === 'reader' && <ReaderPage />}
       </Layout>
 
       {showUpload && (

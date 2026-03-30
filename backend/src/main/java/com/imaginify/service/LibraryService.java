@@ -3,6 +3,7 @@ package com.imaginify.service;
 import com.imaginify.dto.request.UploadBookRequest;
 import com.imaginify.dto.response.BookResponse;
 import com.imaginify.dto.response.BookSummaryResponse;
+import com.imaginify.dto.response.ChapterContentResponse;
 import com.imaginify.dto.response.PresignedDownloadUrlResponse;
 import com.imaginify.dto.response.PresignedUploadUrlResponse;
 import com.imaginify.exception.BookNotFoundException;
@@ -233,6 +234,45 @@ public class LibraryService {
 
         String chapterKey = String.format("books/%s/chapters/%02d.txt", book.getSlug(), chapterNumber);
         return storageService.downloadText(chapterKey);
+    }
+
+    /**
+     * Retrieve chapter content with navigation metadata for e-reader.
+     */
+    public ChapterContentResponse getChapterContent(String bookId, int chapterNumber) {
+        Book book = bookRepository.findById(bookId)
+                .orElseThrow(() -> new BookNotFoundException(bookId));
+
+        List<Chapter> chapters = book.getChapters();
+        if (chapters == null || chapters.isEmpty()) {
+            throw new BookProcessingException("Book has no chapters");
+        }
+
+        int totalChapters = chapters.size();
+        if (chapterNumber < 1 || chapterNumber > totalChapters) {
+            throw new BookProcessingException(
+                    String.format("Chapter %d not found. Book has %d chapters.", chapterNumber, totalChapters));
+        }
+
+        Chapter chapter = chapters.stream()
+                .filter(ch -> ch.getChapterNumber() == chapterNumber)
+                .findFirst()
+                .orElseThrow(() -> new BookProcessingException("Chapter " + chapterNumber + " not found"));
+
+        String chapterKey = String.format("books/%s/chapters/%02d.txt", book.getSlug(), chapterNumber);
+        String content = storageService.downloadText(chapterKey);
+
+        return new ChapterContentResponse(
+                bookId,
+                chapterNumber,
+                chapter.getTitle(),
+                chapter.getChapterType(),
+                content,
+                chapter.getTextLength(),
+                totalChapters,
+                chapterNumber > 1,
+                chapterNumber < totalChapters
+        );
     }
 
     private boolean matchesQuery(Book book, String query) {
