@@ -159,7 +159,7 @@ export function ReaderPage() {
 
               {/* Floating popover for selected book */}
               {isSelected && selectedBook && (
-                <div className="absolute left-0 right-0 top-full mt-2 z-20 bg-surface border border-cosmic-500/50 rounded-lg shadow-xl shadow-cosmic-500/20">
+                <div className="absolute left-0 right-0 top-full mt-2 z-20 bg-surface border border-cosmic-400/50 rounded-lg shadow-[0_8px_32px_rgba(0,0,0,0.3),0_0_20px_rgba(139,92,246,0.25)]">
                   <div className="p-4">
                     {/* Metadata */}
                     <div className="space-y-2 mb-4 text-sm">
