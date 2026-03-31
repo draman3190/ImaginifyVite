@@ -55,6 +55,7 @@ dependencies {
     eventHandlerDeps("software.amazon.awssdk:dynamodb-enhanced")
     eventHandlerDeps("software.amazon.awssdk:s3")
     eventHandlerDeps("software.amazon.awssdk:secretsmanager")
+    eventHandlerDeps("software.amazon.awssdk:lambda")
     eventHandlerDeps("software.amazon.awssdk:url-connection-client")
     eventHandlerDeps("com.fasterxml.jackson.core:jackson-databind:2.18.2")
     eventHandlerDeps("org.slf4j:slf4j-simple:2.0.16")
