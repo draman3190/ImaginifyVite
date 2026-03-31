@@ -35,7 +35,12 @@ import software.amazon.awssdk.services.s3.model.GetObjectResponse;
 import software.amazon.awssdk.services.s3.model.PutObjectRequest;
 import software.amazon.awssdk.services.secretsmanager.SecretsManagerClient;
 import software.amazon.awssdk.core.sync.RequestBody;
+import software.amazon.awssdk.services.lambda.LambdaClient;
+import software.amazon.awssdk.services.lambda.model.InvocationType;
+import software.amazon.awssdk.services.lambda.model.InvokeRequest;
+import software.amazon.awssdk.core.SdkBytes;
 
+import com.imaginify.model.ImageStatus;
 import com.imaginify.service.client.GeminiTextClient;
 
 import java.nio.charset.StandardCharsets;
@@ -57,6 +62,8 @@ public class BookUploadEventHandler implements RequestHandler<S3Event, String> {
     private final SegmentDetectionService segmentDetectionService;
     private final ChapterSummaryService chapterSummaryService;
     private final String bucketName;
+    private final LambdaClient lambdaClient;
+    private final String imageGenerationLambdaName;
 
     public BookUploadEventHandler() {
         String tableName = System.getenv("TABLE_NAME");
@@ -91,19 +98,29 @@ public class BookUploadEventHandler implements RequestHandler<S3Event, String> {
             }
         }
         this.chapterSummaryService = new ChapterSummaryService(geminiClient);
+
+        // Initialize Lambda client for triggering image generation
+        this.lambdaClient = LambdaClient.builder()
+                .httpClient(UrlConnectionHttpClient.create())
+                .build();
+        this.imageGenerationLambdaName = System.getenv("IMAGE_GENERATION_LAMBDA_NAME");
     }
 
     BookUploadEventHandler(S3Client s3Client, DynamoDbTable<Book> bookTable,
                            TextParsingService textParsingService,
                            SegmentDetectionService segmentDetectionService,
                            ChapterSummaryService chapterSummaryService,
-                           String bucketName) {
+                           String bucketName,
+                           LambdaClient lambdaClient,
+                           String imageGenerationLambdaName) {
         this.s3Client = s3Client;
         this.bookTable = bookTable;
         this.textParsingService = textParsingService;
         this.segmentDetectionService = segmentDetectionService;
         this.chapterSummaryService = chapterSummaryService;
         this.bucketName = bucketName;
+        this.lambdaClient = lambdaClient;
+        this.imageGenerationLambdaName = imageGenerationLambdaName;
     }
 
     @Override
@@ -238,6 +255,9 @@ public class BookUploadEventHandler implements RequestHandler<S3Event, String> {
             book.setProcessingStatus(ProcessingStatus.COMPLETED.name());
             bookTable.putItem(book);
             log.info("Book processing completed: bookId={}, title={}", bookId, book.getTitle());
+
+            // Auto-trigger image generation
+            triggerImageGeneration(bookId, book);
         } catch (Exception e) {
             log.error("Failed to process book: bookId={}", bookId, e);
             book.setProcessingStatus(ProcessingStatus.FAILED.name());
@@ -268,5 +288,40 @@ public class BookUploadEventHandler implements RequestHandler<S3Event, String> {
                 .bucket(bucket)
                 .key(sourceKey)
                 .build());
+    }
+
+    /**
+     * Triggers asynchronous image generation for a book by invoking the image generation Lambda.
+     * Sets imageStatus to GENERATING and invokes the Lambda asynchronously.
+     */
+    private void triggerImageGeneration(String bookId, Book book) {
+        if (imageGenerationLambdaName == null || imageGenerationLambdaName.isBlank()) {
+            log.warn("Image generation Lambda function name not configured. " +
+                    "Set IMAGE_GENERATION_LAMBDA_NAME environment variable.");
+            return;
+        }
+
+        try {
+            // Set status to GENERATING before invoking Lambda
+            book.setImageStatus(ImageStatus.GENERATING.name());
+            bookTable.putItem(book);
+
+            String payload = String.format("{\"bookId\":\"%s\"}", bookId);
+
+            InvokeRequest invokeRequest = InvokeRequest.builder()
+                    .functionName(imageGenerationLambdaName)
+                    .invocationType(InvocationType.EVENT) // Async invocation
+                    .payload(SdkBytes.fromUtf8String(payload))
+                    .build();
+
+            lambdaClient.invoke(invokeRequest);
+            log.info("Successfully triggered image generation for book: {}", bookId);
+
+        } catch (Exception e) {
+            log.error("Failed to trigger image generation for book: {}", bookId, e);
+            // Revert status on failure - book is still readable, just without images
+            book.setImageStatus(ImageStatus.FAILED.name());
+            bookTable.putItem(book);
+        }
     }
 }

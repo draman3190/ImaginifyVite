@@ -37,9 +37,11 @@ export function ReaderPage() {
     try {
       setLoading(true);
       const allBooks = await fetchBooks();
-      // Filter to only show completed books
-      const completedBooks = allBooks.filter((b) => b.processingStatus === 'COMPLETED');
-      setBooks(completedBooks);
+      // Filter to only show books that are fully ready (processed AND illustrations generated)
+      const readyBooks = allBooks.filter(
+        (b) => b.processingStatus === 'COMPLETED' && b.imageStatus === 'COMPLETED'
+      );
+      setBooks(readyBooks);
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to load books');
     } finally {
@@ -112,7 +114,7 @@ export function ReaderPage() {
         <div className="mb-4 text-6xl opacity-60">📚</div>
         <h2 className="mb-2 text-xl font-semibold text-text-primary">No books ready to read</h2>
         <p className="text-sm text-text-secondary">
-          Upload and process books in My Books to start reading.
+          Books will appear here once processing and illustration generation are complete.
         </p>
       </div>
     );

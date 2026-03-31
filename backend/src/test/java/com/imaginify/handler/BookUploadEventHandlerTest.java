@@ -61,8 +61,9 @@ class BookUploadEventHandlerTest {
         segmentDetectionService = new SegmentDetectionService();
         chapterSummaryService = new ChapterSummaryService();
         context = mock(Context.class);
+        // Pass null for lambdaClient and imageGenerationLambdaName since we don't test Lambda invocation
         handler = new BookUploadEventHandler(s3Client, bookTable, textParsingService,
-                segmentDetectionService, chapterSummaryService, BUCKET_NAME);
+                segmentDetectionService, chapterSummaryService, BUCKET_NAME, null, null);
     }
 
     @Test

@@ -287,6 +287,17 @@ export class ImaginifyStack extends cdk.Stack {
       ],
     }));
 
+    // Lambda invoke permission for image generation (added below after imageGenerationFunction is created)
+    const imageGenerationFunctionName = `imaginify-image-generation-${stage}`;
+
+    eventHandlerRole.addToPolicy(new iam.PolicyStatement({
+      effect: iam.Effect.ALLOW,
+      actions: ['lambda:InvokeFunction'],
+      resources: [
+        `arn:aws:lambda:${stageConfig.region}:${stageConfig.account}:function:${imageGenerationFunctionName}`,
+      ],
+    }));
+
     // Event handler Lambda Function (plain Java, no Spring)
     this.eventHandlerFunction = new lambda.Function(this, 'EventHandlerFunction', {
       functionName: `imaginify-event-handler-${stage}`,
@@ -300,6 +311,7 @@ export class ImaginifyStack extends cdk.Stack {
         TABLE_NAME: this.table.tableName,
         BUCKET_NAME: this.bucket.bucketName,
         SECRET_NAME: this.secret.secretName,
+        IMAGE_GENERATION_LAMBDA_NAME: imageGenerationFunctionName,
       },
       logGroup: eventHandlerLogGroup,
     });
