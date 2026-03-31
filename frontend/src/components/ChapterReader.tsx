@@ -63,22 +63,11 @@ export function ChapterReader({ bookId, initialChapter, onBack }: ChapterReaderP
   const [error, setError] = useState<string | null>(null);
   const [showChapterDropdown, setShowChapterDropdown] = useState(false);
 
-  // Progress bar animation state
-  const [displayedProgress, setDisplayedProgress] = useState(0);
-  const targetProgressRef = useRef(0);
-  const animationFrameRef = useRef<number>();
-
-  // Guard against duplicate chapter loads
+  // Prevent duplicate chapter loads
   const loadingChapterRef = useRef<number | null>(null);
 
-  // Refs for values needed in navigation callbacks (avoid stale closures)
-  const currentChapterRef = useRef(currentChapter);
-  const chapterRef = useRef(chapter);
-  const totalPagesRef = useRef(1);
-
-  // Keep refs in sync
-  currentChapterRef.current = currentChapter;
-  chapterRef.current = chapter;
+  // Prefetch cache for next/previous chapters
+  const prefetchCacheRef = useRef<Map<number, ChapterContent>>(new Map());
 
   const pages = useMemo(() => {
     if (!chapter?.content) return [''];
@@ -86,51 +75,12 @@ export function ChapterReader({ bookId, initialChapter, onBack }: ChapterReaderP
   }, [chapter?.content]);
 
   const totalPages = pages.length;
-  totalPagesRef.current = totalPages;
 
   // Calculate actual progress
   const actualProgress = chapter
     ? ((currentChapter - 1) / chapter.totalChapters) * 100 +
       ((currentPage + 1) / totalPages / chapter.totalChapters) * 100
     : 0;
-
-  // Update target progress - only allow forward or significant backward (chapter change)
-  useEffect(() => {
-    const current = targetProgressRef.current;
-    // Allow forward progress, or allow reset if it's a big jump back (new chapter)
-    if (actualProgress > current || actualProgress < current - 10) {
-      targetProgressRef.current = actualProgress;
-    }
-  }, [actualProgress]);
-
-  // RAF animation loop for smooth progress bar
-  useEffect(() => {
-    const animate = () => {
-      const target = targetProgressRef.current;
-
-      setDisplayedProgress(prev => {
-        const diff = target - prev;
-
-        // Snap if very close
-        if (Math.abs(diff) < 0.1) {
-          return target;
-        }
-
-        // Smooth chase at ~70% speed
-        return prev + diff * 0.12;
-      });
-
-      animationFrameRef.current = requestAnimationFrame(animate);
-    };
-
-    animationFrameRef.current = requestAnimationFrame(animate);
-
-    return () => {
-      if (animationFrameRef.current) {
-        cancelAnimationFrame(animationFrameRef.current);
-      }
-    };
-  }, []);
 
   const loadBook = useCallback(async () => {
     try {
@@ -143,10 +93,19 @@ export function ChapterReader({ bookId, initialChapter, onBack }: ChapterReaderP
 
   const loadChapter = useCallback(
     async (chapterNum: number) => {
-      // Prevent duplicate loads of the same chapter
-      if (loadingChapterRef.current === chapterNum) {
+      if (loadingChapterRef.current === chapterNum) return;
+
+      // Check prefetch cache first
+      const cached = prefetchCacheRef.current.get(chapterNum);
+      if (cached) {
+        prefetchCacheRef.current.delete(chapterNum);
+        setChapter(cached);
+        setCurrentChapter(chapterNum);
+        setCurrentPage(0);
+        window.history.replaceState({}, '', `/reader/${bookId}/${chapterNum}`);
         return;
       }
+
       loadingChapterRef.current = chapterNum;
 
       try {
@@ -154,15 +113,10 @@ export function ChapterReader({ bookId, initialChapter, onBack }: ChapterReaderP
         setError(null);
         const chapterData = await fetchChapterContent(bookId, chapterNum);
 
-        // Only apply if this is still the chapter we want
         if (loadingChapterRef.current === chapterNum) {
           setChapter(chapterData);
           setCurrentChapter(chapterNum);
           setCurrentPage(0);
-          // Reset progress target for new chapter
-          targetProgressRef.current =
-            ((chapterNum - 1) / chapterData.totalChapters) * 100 +
-            (1 / chapterData.totalChapters) * 100 / 10; // Approximate first page
           window.history.replaceState({}, '', `/reader/${bookId}/${chapterNum}`);
         }
       } catch (err) {
@@ -179,37 +133,51 @@ export function ChapterReader({ bookId, initialChapter, onBack }: ChapterReaderP
     [bookId]
   );
 
+  // Prefetch adjacent chapters when near page boundaries
+  useEffect(() => {
+    if (!chapter) return;
+
+    const prefetch = async (chapterNum: number) => {
+      if (prefetchCacheRef.current.has(chapterNum)) return;
+      try {
+        const data = await fetchChapterContent(bookId, chapterNum);
+        prefetchCacheRef.current.set(chapterNum, data);
+      } catch {
+        // Ignore prefetch errors
+      }
+    };
+
+    // Prefetch next chapter when on last 3 pages
+    if (chapter.hasNext && currentPage >= totalPages - 3) {
+      prefetch(currentChapter + 1);
+    }
+
+    // Prefetch previous chapter when on first 3 pages
+    if (chapter.hasPrevious && currentPage <= 2) {
+      prefetch(currentChapter - 1);
+    }
+  }, [currentPage, totalPages, chapter, currentChapter, bookId]);
+
   useEffect(() => {
     loadBook();
     loadChapter(initialChapter);
   }, [loadBook, loadChapter, initialChapter]);
 
   const goToNextPage = useCallback(() => {
-    setCurrentPage(prev => {
-      const total = totalPagesRef.current;
-      if (prev < total - 1) {
-        return prev + 1;
-      }
-      // At last page, trigger chapter load if available
-      if (chapterRef.current?.hasNext && loadingChapterRef.current === null) {
-        loadChapter(currentChapterRef.current + 1);
-      }
-      return prev;
-    });
-  }, [loadChapter]);
+    if (currentPage < totalPages - 1) {
+      setCurrentPage(p => p + 1);
+    } else if (chapter?.hasNext && loadingChapterRef.current === null) {
+      loadChapter(currentChapter + 1);
+    }
+  }, [currentPage, totalPages, chapter?.hasNext, currentChapter, loadChapter]);
 
   const goToPrevPage = useCallback(() => {
-    setCurrentPage(prev => {
-      if (prev > 0) {
-        return prev - 1;
-      }
-      // At first page, trigger chapter load if available
-      if (chapterRef.current?.hasPrevious && loadingChapterRef.current === null) {
-        loadChapter(currentChapterRef.current - 1);
-      }
-      return prev;
-    });
-  }, [loadChapter]);
+    if (currentPage > 0) {
+      setCurrentPage(p => p - 1);
+    } else if (chapter?.hasPrevious && loadingChapterRef.current === null) {
+      loadChapter(currentChapter - 1);
+    }
+  }, [currentPage, chapter?.hasPrevious, currentChapter, loadChapter]);
 
   const handleChapterSelect = (chapterNum: number) => {
     setShowChapterDropdown(false);
@@ -218,7 +186,6 @@ export function ChapterReader({ bookId, initialChapter, onBack }: ChapterReaderP
     }
   };
 
-  // Keyboard navigation
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
       if (e.target instanceof HTMLSelectElement || e.target instanceof HTMLInputElement) {
@@ -273,18 +240,8 @@ export function ChapterReader({ bookId, initialChapter, onBack }: ChapterReaderP
           onClick={onBack}
           className="flex items-center gap-2 text-sm text-text-secondary hover:text-text-primary transition-all cursor-pointer px-3 py-1 rounded border border-transparent hover:border-ethereal-400/30 hover:shadow-[0_0_10px_rgba(251,191,36,0.15)]"
         >
-          <svg
-            className="w-4 h-4"
-            fill="none"
-            stroke="currentColor"
-            viewBox="0 0 24 24"
-          >
-            <path
-              strokeLinecap="round"
-              strokeLinejoin="round"
-              strokeWidth={2}
-              d="M15 19l-7-7 7-7"
-            />
+          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
           </svg>
           Back
         </button>
@@ -295,7 +252,6 @@ export function ChapterReader({ bookId, initialChapter, onBack }: ChapterReaderP
           </h2>
         </div>
 
-        {/* Chapter dropdown */}
         <div className="relative">
           <button
             onClick={() => setShowChapterDropdown(!showChapterDropdown)}
@@ -312,12 +268,7 @@ export function ChapterReader({ bookId, initialChapter, onBack }: ChapterReaderP
               stroke="currentColor"
               viewBox="0 0 24 24"
             >
-              <path
-                strokeLinecap="round"
-                strokeLinejoin="round"
-                strokeWidth={2}
-                d="M19 9l-7 7-7-7"
-              />
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
             </svg>
           </button>
 
@@ -334,9 +285,7 @@ export function ChapterReader({ bookId, initialChapter, onBack }: ChapterReaderP
                   }`}
                 >
                   <span className="font-medium">Ch. {ch.chapterNumber}</span>
-                  {ch.title && (
-                    <span className="ml-2 text-text-muted truncate">{ch.title}</span>
-                  )}
+                  {ch.title && <span className="ml-2 text-text-muted truncate">{ch.title}</span>}
                 </button>
               ))}
             </div>
@@ -362,12 +311,11 @@ export function ChapterReader({ bookId, initialChapter, onBack }: ChapterReaderP
 
       {/* Footer */}
       <div className="mt-4 p-4 rounded-lg bg-surface/80 border border-white/10">
-        {/* Progress bar */}
         <div className="mb-4">
           <div className="h-1 bg-white/10 rounded-full overflow-hidden">
             <div
-              className="h-full bg-gradient-to-r from-ethereal-500 to-cosmic-500"
-              style={{ width: `${displayedProgress}%` }}
+              className="h-full bg-gradient-to-r from-ethereal-500 to-cosmic-500 transition-[width] duration-300"
+              style={{ width: `${actualProgress}%` }}
             />
           </div>
         </div>
@@ -376,15 +324,10 @@ export function ChapterReader({ bookId, initialChapter, onBack }: ChapterReaderP
           <button
             onClick={goToPrevPage}
             disabled={currentPage === 0 && !chapter?.hasPrevious}
-            className="flex items-center gap-2 px-4 py-2 text-sm font-medium text-text-secondary hover:text-text-primary disabled:opacity-30 disabled:cursor-not-allowed disabled:hover:shadow-none disabled:hover:border-transparent cursor-pointer transition-all rounded border border-transparent hover:border-ethereal-400/30 hover:shadow-[0_0_10px_rgba(251,191,36,0.15)]"
+            className="flex items-center gap-2 px-4 py-2 text-sm font-medium text-text-secondary hover:text-text-primary disabled:opacity-30 disabled:cursor-not-allowed cursor-pointer transition-all rounded border border-transparent hover:border-ethereal-400/30 hover:shadow-[0_0_10px_rgba(251,191,36,0.15)]"
           >
             <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path
-                strokeLinecap="round"
-                strokeLinejoin="round"
-                strokeWidth={2}
-                d="M15 19l-7-7 7-7"
-              />
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
             </svg>
             Previous
           </button>
@@ -398,27 +341,18 @@ export function ChapterReader({ bookId, initialChapter, onBack }: ChapterReaderP
           <button
             onClick={goToNextPage}
             disabled={currentPage === totalPages - 1 && !chapter?.hasNext}
-            className="flex items-center gap-2 px-4 py-2 text-sm font-medium text-text-secondary hover:text-text-primary disabled:opacity-30 disabled:cursor-not-allowed disabled:hover:shadow-none disabled:hover:border-transparent cursor-pointer transition-all rounded border border-transparent hover:border-ethereal-400/30 hover:shadow-[0_0_10px_rgba(251,191,36,0.15)]"
+            className="flex items-center gap-2 px-4 py-2 text-sm font-medium text-text-secondary hover:text-text-primary disabled:opacity-30 disabled:cursor-not-allowed cursor-pointer transition-all rounded border border-transparent hover:border-ethereal-400/30 hover:shadow-[0_0_10px_rgba(251,191,36,0.15)]"
           >
             Next
             <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path
-                strokeLinecap="round"
-                strokeLinejoin="round"
-                strokeWidth={2}
-                d="M9 5l7 7-7 7"
-              />
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
             </svg>
           </button>
         </div>
       </div>
 
-      {/* Click outside to close dropdown */}
       {showChapterDropdown && (
-        <div
-          className="fixed inset-0 z-40"
-          onClick={() => setShowChapterDropdown(false)}
-        />
+        <div className="fixed inset-0 z-40" onClick={() => setShowChapterDropdown(false)} />
       )}
     </div>
   );
