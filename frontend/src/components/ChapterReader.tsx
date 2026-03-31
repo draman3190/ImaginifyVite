@@ -238,7 +238,7 @@ export function ChapterReader({ bookId, initialChapter, onBack }: ChapterReaderP
       <div className="flex items-center justify-between mb-4 p-4 rounded-lg bg-surface/80 border border-white/10">
         <button
           onClick={onBack}
-          className="flex items-center gap-2 text-sm text-text-secondary hover:text-text-primary transition-all cursor-pointer px-3 py-1 rounded border border-transparent hover:border-ethereal-400/30 hover:shadow-[0_0_10px_rgba(251,191,36,0.15)]"
+          className="flex items-center gap-2 text-sm text-text-secondary hover:text-cosmic-300 transition-all cursor-pointer px-3 py-1 rounded border border-transparent hover:border-cosmic-400/30 hover:shadow-[0_0_10px_rgba(139,92,246,0.15)]"
         >
           <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
@@ -255,10 +255,10 @@ export function ChapterReader({ bookId, initialChapter, onBack }: ChapterReaderP
         <div className="relative">
           <button
             onClick={() => setShowChapterDropdown(!showChapterDropdown)}
-            className={`flex items-center gap-2 text-sm text-text-secondary hover:text-text-primary transition-all px-3 py-1 rounded border cursor-pointer ${
+            className={`flex items-center gap-2 text-sm text-text-secondary hover:text-cosmic-300 transition-all px-3 py-1 rounded border cursor-pointer ${
               showChapterDropdown
-                ? 'border-cosmic-400/50 shadow-[0_0_15px_rgba(139,92,246,0.3)]'
-                : 'border-white/10 hover:border-ethereal-400/30 hover:shadow-[0_0_10px_rgba(251,191,36,0.15)]'
+                ? 'border-ethereal-400/50 shadow-[0_0_15px_rgba(251,191,36,0.3)]'
+                : 'border-white/10 hover:border-cosmic-400/30 hover:shadow-[0_0_10px_rgba(139,92,246,0.15)]'
             }`}
           >
             Ch. {currentChapter}
@@ -273,15 +273,15 @@ export function ChapterReader({ bookId, initialChapter, onBack }: ChapterReaderP
           </button>
 
           {showChapterDropdown && book?.chapters && (
-            <div className="absolute right-0 top-full mt-2 w-64 max-h-80 overflow-y-auto bg-surface border border-cosmic-400/30 rounded-lg shadow-xl shadow-cosmic-500/20 z-50">
+            <div className="absolute right-0 top-full mt-2 w-64 max-h-80 overflow-y-auto bg-surface border border-ethereal-400/30 rounded-lg shadow-xl shadow-ethereal-500/20 z-50">
               {book.chapters.map((ch: ChapterSummary) => (
                 <button
                   key={ch.chapterNumber}
                   onClick={() => handleChapterSelect(ch.chapterNumber)}
                   className={`w-full text-left px-4 py-2 text-sm transition-all cursor-pointer ${
                     ch.chapterNumber === currentChapter
-                      ? 'bg-cosmic-500/20 text-cosmic-300 shadow-[inset_0_0_10px_rgba(139,92,246,0.2)]'
-                      : 'text-text-secondary hover:bg-ethereal-500/10 hover:text-ethereal-300 hover:shadow-[inset_0_0_10px_rgba(251,191,36,0.1)]'
+                      ? 'bg-ethereal-500/20 text-ethereal-300 shadow-[inset_0_0_10px_rgba(251,191,36,0.2)]'
+                      : 'text-text-secondary hover:bg-cosmic-500/10 hover:text-cosmic-300 hover:shadow-[inset_0_0_10px_rgba(139,92,246,0.1)]'
                   }`}
                 >
                   <span className="font-medium">Ch. {ch.chapterNumber}</span>
@@ -314,7 +314,7 @@ export function ChapterReader({ bookId, initialChapter, onBack }: ChapterReaderP
         <div className="mb-4">
           <div className="h-1 bg-white/10 rounded-full overflow-hidden">
             <div
-              className="h-full bg-gradient-to-r from-ethereal-500 to-cosmic-500 transition-[width] duration-300"
+              className="h-full bg-gradient-to-r from-cosmic-500 to-ethereal-500 transition-[width] duration-300"
               style={{ width: `${actualProgress}%` }}
             />
           </div>
@@ -324,7 +324,7 @@ export function ChapterReader({ bookId, initialChapter, onBack }: ChapterReaderP
           <button
             onClick={goToPrevPage}
             disabled={currentPage === 0 && !chapter?.hasPrevious}
-            className="flex items-center gap-2 px-4 py-2 text-sm font-medium text-text-secondary hover:text-text-primary disabled:opacity-30 disabled:cursor-not-allowed cursor-pointer transition-all rounded border border-transparent hover:border-ethereal-400/30 hover:shadow-[0_0_10px_rgba(251,191,36,0.15)]"
+            className="flex items-center gap-2 px-4 py-2 text-sm font-medium text-text-secondary hover:text-cosmic-300 disabled:opacity-30 disabled:cursor-not-allowed cursor-pointer transition-all rounded border border-transparent hover:border-cosmic-400/30 hover:shadow-[0_0_10px_rgba(139,92,246,0.15)]"
           >
             <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
@@ -341,7 +341,7 @@ export function ChapterReader({ bookId, initialChapter, onBack }: ChapterReaderP
           <button
             onClick={goToNextPage}
             disabled={currentPage === totalPages - 1 && !chapter?.hasNext}
-            className="flex items-center gap-2 px-4 py-2 text-sm font-medium text-text-secondary hover:text-text-primary disabled:opacity-30 disabled:cursor-not-allowed cursor-pointer transition-all rounded border border-transparent hover:border-ethereal-400/30 hover:shadow-[0_0_10px_rgba(251,191,36,0.15)]"
+            className="flex items-center gap-2 px-4 py-2 text-sm font-medium text-text-secondary hover:text-cosmic-300 disabled:opacity-30 disabled:cursor-not-allowed cursor-pointer transition-all rounded border border-transparent hover:border-cosmic-400/30 hover:shadow-[0_0_10px_rgba(139,92,246,0.15)]"
           >
             Next
             <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">

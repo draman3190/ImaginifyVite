@@ -19,7 +19,7 @@ export function Layout({ children, activeTab, onTabChange, onUploadClick }: Layo
     <div className="min-h-screen bg-starfield">
       <header className="bg-enchanted-header">
         <div className="mx-auto flex max-w-6xl items-center justify-between px-4 py-4 sm:px-6">
-          <h1 className="bg-gradient-to-r from-ethereal-400 via-ethereal-300 to-cosmic-400 bg-clip-text text-2xl font-bold text-transparent">
+          <h1 className="bg-gradient-to-r from-cosmic-400 via-cosmic-300 to-ethereal-400 bg-clip-text text-2xl font-bold text-transparent">
             Imaginify
           </h1>
           {activeTab === 'my-books' && (
