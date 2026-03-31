@@ -9,12 +9,12 @@ export function ProgressBar({ current, total }: ProgressBarProps) {
   return (
     <div className="w-full">
       <div className="relative h-6 w-full overflow-hidden rounded-full bg-deep border border-border-subtle">
-        {/* Progress fill with ethereal gold to cosmic purple gradient */}
+        {/* Progress fill with cosmic purple to ethereal gold gradient */}
         <div
           className="h-full transition-all duration-500 ease-out"
           style={{
             width: `${percentage}%`,
-            background: 'linear-gradient(90deg, #f59e0b 0%, #d97706 40%, #8b5cf6 100%)',
+            background: 'linear-gradient(90deg, #8b5cf6 0%, #a78bfa 40%, #f59e0b 100%)',
           }}
         />
         {/* Percentage text centered - always readable with text shadow */}
