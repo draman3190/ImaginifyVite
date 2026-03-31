@@ -22,14 +22,12 @@ export function Layout({ children, activeTab, onTabChange, onUploadClick }: Layo
           <h1 className="bg-gradient-to-r from-cosmic-400 via-cosmic-300 to-ethereal-400 bg-clip-text text-2xl font-bold text-transparent">
             Imaginify
           </h1>
-          {activeTab === 'my-books' && (
-            <button
-              onClick={onUploadClick}
-              className="btn-ethereal rounded-lg px-4 py-2 text-sm font-medium"
-            >
-              Upload Book
-            </button>
-          )}
+          <button
+            onClick={onUploadClick}
+            className="btn-ethereal rounded-lg px-4 py-2 text-sm font-medium"
+          >
+            Upload Book
+          </button>
         </div>
       </header>
 

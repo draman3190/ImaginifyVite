@@ -1,9 +1,29 @@
 import { useState, useEffect, useCallback } from 'react';
 import { useBooks } from '../hooks/useBooks';
 import { generateImages } from '../api/imageApi';
+import { DeleteConfirmModal } from './DeleteConfirmModal';
 
 export function LibraryPage() {
-  const { books, loading, error, refresh, silentRefresh } = useBooks();
+  const { books, loading, error, refresh, silentRefresh, deleteBook } = useBooks();
+  const [deleteTarget, setDeleteTarget] = useState<{ id: string; title: string } | null>(null);
+  const [isDeleting, setIsDeleting] = useState(false);
+  const [openMenuId, setOpenMenuId] = useState<string | null>(null);
+
+  const handleDeleteClick = (bookId: string, title: string) => {
+    setOpenMenuId(null);
+    setDeleteTarget({ id: bookId, title });
+  };
+
+  const handleDeleteConfirm = async () => {
+    if (!deleteTarget) return;
+    setIsDeleting(true);
+    try {
+      await deleteBook(deleteTarget.id);
+    } finally {
+      setIsDeleting(false);
+      setDeleteTarget(null);
+    }
+  };
 
   // Note: useBooks hook automatically polls when imageStatus === 'GENERATING'
 
@@ -48,7 +68,7 @@ export function LibraryPage() {
         <p className="text-sm text-text-muted">{books.length} book{books.length !== 1 ? 's' : ''} in your collection</p>
       </div>
 
-      <div className="overflow-hidden rounded-lg border border-border-subtle">
+      <div className="rounded-lg border border-border-subtle">
         <table className="w-full">
           <thead className="bg-raised/50">
             <tr>
@@ -72,6 +92,9 @@ export function LibraryPage() {
               </th>
               <th className="px-4 py-3 text-center text-xs font-medium uppercase tracking-wider text-text-muted">
                 Illustrations
+              </th>
+              <th className="px-4 py-3 text-center text-xs font-medium uppercase tracking-wider text-text-muted">
+                Actions
               </th>
             </tr>
           </thead>
@@ -123,11 +146,54 @@ export function LibraryPage() {
                     onGenerateStarted={silentRefresh}
                   />
                 </td>
+                <td className="px-4 py-4 text-center">
+                  <div className="relative inline-block">
+                    <button
+                      onClick={() => setOpenMenuId(openMenuId === book.bookId ? null : book.bookId)}
+                      className={`p-1.5 rounded transition-all cursor-pointer ${
+                        openMenuId === book.bookId
+                          ? 'text-ethereal-300 shadow-[0_0_15px_rgba(251,191,36,0.3)]'
+                          : 'text-text-secondary hover:text-cosmic-300 hover:shadow-[0_0_10px_rgba(139,92,246,0.2)]'
+                      }`}
+                    >
+                      <svg className="w-5 h-5" fill="currentColor" viewBox="0 0 20 20">
+                        <path d="M10 6a2 2 0 110-4 2 2 0 010 4zM10 12a2 2 0 110-4 2 2 0 010 4zM10 18a2 2 0 110-4 2 2 0 010 4z" />
+                      </svg>
+                    </button>
+                    {openMenuId === book.bookId && (
+                      <div className="absolute left-full top-0 ml-12 w-32 bg-surface border border-ethereal-400/30 rounded-lg shadow-xl shadow-ethereal-500/20 z-50">
+                        <button
+                          onClick={() => handleDeleteClick(book.bookId, book.title)}
+                          className="w-full text-left px-3 py-2 text-sm text-rose-400 hover:bg-rose-500/20 hover:shadow-[inset_0_0_10px_rgba(244,63,94,0.1)] transition-all cursor-pointer rounded-lg"
+                        >
+                          Delete
+                        </button>
+                      </div>
+                    )}
+                  </div>
+                </td>
               </tr>
             ))}
           </tbody>
         </table>
       </div>
+
+      {/* Click outside to close menu */}
+      {openMenuId && (
+        <div
+          className="fixed inset-0 z-40"
+          onClick={() => setOpenMenuId(null)}
+        />
+      )}
+
+      {deleteTarget && (
+        <DeleteConfirmModal
+          bookTitle={deleteTarget.title}
+          isDeleting={isDeleting}
+          onConfirm={handleDeleteConfirm}
+          onCancel={() => setDeleteTarget(null)}
+        />
+      )}
     </div>
   );
 }
