@@ -39,6 +39,10 @@ export function BookLibrary() {
     setRefreshTrigger((prev) => prev + 1);
   };
 
+  const handleRefreshNeeded = () => {
+    setRefreshTrigger((prev) => prev + 1);
+  };
+
   return (
     <>
       <Layout
@@ -47,9 +51,18 @@ export function BookLibrary() {
         onUploadClick={() => setShowUpload(true)}
       >
         {activeTab === 'my-books' && (
-          <MyBooksPage onUpload={() => setShowUpload(true)} refreshTrigger={refreshTrigger} />
+          <MyBooksPage
+            onUpload={() => setShowUpload(true)}
+            refreshTrigger={refreshTrigger}
+            onRefreshNeeded={handleRefreshNeeded}
+          />
         )}
-        {activeTab === 'library' && <LibraryPage />}
+        {activeTab === 'library' && (
+          <LibraryPage
+            refreshTrigger={refreshTrigger}
+            onRefreshNeeded={handleRefreshNeeded}
+          />
+        )}
         {activeTab === 'reader' && <ReaderPage />}
       </Layout>
 

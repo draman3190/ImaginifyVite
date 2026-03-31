@@ -6,10 +6,17 @@ import { EmptyState } from './EmptyState';
 interface MyBooksPageProps {
   onUpload: () => void;
   refreshTrigger?: number;
+  onRefreshNeeded?: () => void;
 }
 
-export function MyBooksPage({ onUpload, refreshTrigger }: MyBooksPageProps) {
+export function MyBooksPage({ onUpload, refreshTrigger, onRefreshNeeded }: MyBooksPageProps) {
   const { books, loading, error, refresh, deleteBook } = useBooks();
+
+  const handleDelete = async (bookId: string) => {
+    await deleteBook(bookId);
+    // Notify parent to refresh other pages
+    onRefreshNeeded?.();
+  };
 
   // Refresh when trigger changes (after upload completes)
   useEffect(() => {
@@ -47,7 +54,7 @@ export function MyBooksPage({ onUpload, refreshTrigger }: MyBooksPageProps) {
   return (
     <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
       {books.map((book) => (
-        <BookCard key={book.bookId} book={book} onDelete={deleteBook} />
+        <BookCard key={book.bookId} book={book} onDelete={handleDelete} />
       ))}
     </div>
   );

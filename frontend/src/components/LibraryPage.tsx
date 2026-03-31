@@ -1,9 +1,21 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useBooks } from '../hooks/useBooks';
 import { DeleteConfirmModal } from './DeleteConfirmModal';
 
-export function LibraryPage() {
+interface LibraryPageProps {
+  refreshTrigger?: number;
+  onRefreshNeeded?: () => void;
+}
+
+export function LibraryPage({ refreshTrigger, onRefreshNeeded }: LibraryPageProps) {
   const { books, loading, error, refresh, deleteBook } = useBooks();
+
+  // Refresh when trigger changes (e.g., after delete on another page)
+  useEffect(() => {
+    if (refreshTrigger && refreshTrigger > 0) {
+      refresh();
+    }
+  }, [refreshTrigger, refresh]);
   const [deleteTarget, setDeleteTarget] = useState<{ id: string; title: string } | null>(null);
   const [isDeleting, setIsDeleting] = useState(false);
   const [openMenuId, setOpenMenuId] = useState<string | null>(null);
@@ -18,6 +30,8 @@ export function LibraryPage() {
     setIsDeleting(true);
     try {
       await deleteBook(deleteTarget.id);
+      // Notify parent to refresh other pages
+      onRefreshNeeded?.();
     } finally {
       setIsDeleting(false);
       setDeleteTarget(null);
