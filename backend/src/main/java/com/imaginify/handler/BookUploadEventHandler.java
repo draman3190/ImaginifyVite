@@ -216,7 +216,12 @@ public class BookUploadEventHandler implements RequestHandler<S3Event, String> {
                 chapters.add(chapter);
             }
             book.setChapters(chapters);
-            bookTable.putItem(book); // Save with chapter count for progress tracking
+
+            // Save with chapter count - abort if book was deleted
+            if (!saveBookIfExists(book, bookId)) {
+                log.info("Book was deleted during processing, aborting: bookId={}", bookId);
+                return;
+            }
             log.info("Book metadata saved with {} chapters, beginning summarization", chapters.size());
 
             // Second pass: Generate summaries and save progress incrementally
@@ -247,13 +252,21 @@ public class BookUploadEventHandler implements RequestHandler<S3Event, String> {
                         tc.chapterNumber(), tc.title(), chapter.getChapterType(), chapterText.length(), segments.size(),
                         summary != null ? summary.substring(0, Math.min(50, summary.length())) + "..." : "null");
 
-                // Save progress after each chapter for real-time tracking
-                bookTable.putItem(book);
+                // Save progress after each chapter - abort if book was deleted
+                if (!saveBookIfExists(book, bookId)) {
+                    log.info("Book was deleted during processing, aborting: bookId={}", bookId);
+                    return;
+                }
             }
             book.setChapters(chapters);
 
             book.setProcessingStatus(ProcessingStatus.COMPLETED.name());
-            bookTable.putItem(book);
+
+            // Final save - abort if book was deleted
+            if (!saveBookIfExists(book, bookId)) {
+                log.info("Book was deleted during processing, aborting: bookId={}", bookId);
+                return;
+            }
             log.info("Book processing completed: bookId={}, title={}", bookId, book.getTitle());
 
             // Auto-trigger image generation
@@ -261,7 +274,29 @@ public class BookUploadEventHandler implements RequestHandler<S3Event, String> {
         } catch (Exception e) {
             log.error("Failed to process book: bookId={}", bookId, e);
             book.setProcessingStatus(ProcessingStatus.FAILED.name());
-            bookTable.putItem(book);
+            // Only save failure status if book still exists
+            saveBookIfExists(book, bookId);
+        }
+    }
+
+    /**
+     * Saves the book to DynamoDB only if it still exists (wasn't deleted).
+     * Uses a conditional write to prevent re-creating deleted books.
+     *
+     * @return true if save succeeded, false if book was deleted
+     */
+    private boolean saveBookIfExists(Book book, String bookId) {
+        try {
+            bookTable.putItem(PutItemEnhancedRequest.builder(Book.class)
+                    .item(book)
+                    .conditionExpression(Expression.builder()
+                            .expression("attribute_exists(bookId)")
+                            .build())
+                    .build());
+            return true;
+        } catch (ConditionalCheckFailedException e) {
+            log.info("Book no longer exists (was deleted): bookId={}", bookId);
+            return false;
         }
     }
 
@@ -302,9 +337,12 @@ public class BookUploadEventHandler implements RequestHandler<S3Event, String> {
         }
 
         try {
-            // Set status to GENERATING before invoking Lambda
+            // Set status to GENERATING before invoking Lambda - only if book still exists
             book.setImageStatus(ImageStatus.GENERATING.name());
-            bookTable.putItem(book);
+            if (!saveBookIfExists(book, bookId)) {
+                log.info("Book was deleted, skipping image generation: bookId={}", bookId);
+                return;
+            }
 
             String payload = String.format("{\"bookId\":\"%s\"}", bookId);
 
@@ -319,9 +357,9 @@ public class BookUploadEventHandler implements RequestHandler<S3Event, String> {
 
         } catch (Exception e) {
             log.error("Failed to trigger image generation for book: {}", bookId, e);
-            // Revert status on failure - book is still readable, just without images
+            // Revert status on failure - only if book still exists
             book.setImageStatus(ImageStatus.FAILED.name());
-            bookTable.putItem(book);
+            saveBookIfExists(book, bookId);
         }
     }
 }

@@ -15,8 +15,11 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import software.amazon.awssdk.enhanced.dynamodb.DynamoDbEnhancedClient;
 import software.amazon.awssdk.enhanced.dynamodb.DynamoDbTable;
+import software.amazon.awssdk.enhanced.dynamodb.Expression;
 import software.amazon.awssdk.enhanced.dynamodb.Key;
 import software.amazon.awssdk.enhanced.dynamodb.TableSchema;
+import software.amazon.awssdk.enhanced.dynamodb.model.PutItemEnhancedRequest;
+import software.amazon.awssdk.services.dynamodb.model.ConditionalCheckFailedException;
 import software.amazon.awssdk.http.urlconnection.UrlConnectionHttpClient;
 import software.amazon.awssdk.services.dynamodb.DynamoDbClient;
 import software.amazon.awssdk.services.s3.S3Client;
@@ -138,24 +141,56 @@ public class ImageGenerationEventHandler implements RequestHandler<Map<String, S
         }
 
         try {
-            processBook(book);
+            boolean shouldContinue = processBook(book);
+            if (!shouldContinue) {
+                log.info("Book was deleted during image generation, aborting: {}", bookId);
+                return "ABORTED: Book deleted";
+            }
             book.setImageStatus(ImageStatus.COMPLETED.name());
-            bookTable.putItem(book);
+            if (!saveBookIfExists(book, bookId)) {
+                log.info("Book was deleted during image generation, aborting: {}", bookId);
+                return "ABORTED: Book deleted";
+            }
             log.info("Image generation completed for book: {}", bookId);
             return "OK";
         } catch (Exception e) {
             log.error("Image generation failed for book: {}", bookId, e);
             book.setImageStatus(ImageStatus.FAILED.name());
-            bookTable.putItem(book);
+            saveBookIfExists(book, bookId); // Only save if book still exists
             return "ERROR: " + e.getMessage();
         }
     }
 
-    private void processBook(Book book) {
+    /**
+     * Saves the book to DynamoDB only if it still exists (wasn't deleted).
+     * Uses a conditional write to prevent re-creating deleted books.
+     *
+     * @return true if save succeeded, false if book was deleted
+     */
+    private boolean saveBookIfExists(Book book, String bookId) {
+        try {
+            bookTable.putItem(PutItemEnhancedRequest.builder(Book.class)
+                    .item(book)
+                    .conditionExpression(Expression.builder()
+                            .expression("attribute_exists(bookId)")
+                            .build())
+                    .build());
+            return true;
+        } catch (ConditionalCheckFailedException e) {
+            log.info("Book no longer exists (was deleted): bookId={}", bookId);
+            return false;
+        }
+    }
+
+    /**
+     * Process all chapters in the book.
+     * @return true if processing should continue, false if book was deleted
+     */
+    private boolean processBook(Book book) {
         List<Chapter> chapters = book.getChapters();
         if (chapters == null || chapters.isEmpty()) {
             log.warn("Book has no chapters: {}", book.getBookId());
-            return;
+            return true;
         }
 
         for (int i = 0; i < chapters.size(); i++) {
@@ -164,13 +199,16 @@ public class ImageGenerationEventHandler implements RequestHandler<Map<String, S
 
             try {
                 processChapter(book, chapter);
-                // Save progress after each chapter
-                bookTable.putItem(book);
+                // Save progress after each chapter - abort if book was deleted
+                if (!saveBookIfExists(book, book.getBookId())) {
+                    return false;
+                }
             } catch (Exception e) {
                 log.error("Failed to process chapter {}: {}", chapter.getChapterNumber(), e.getMessage(), e);
                 // Continue with next chapter instead of failing entire book
             }
         }
+        return true;
     }
 
     private void processChapter(Book book, Chapter chapter) {
