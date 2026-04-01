@@ -86,9 +86,19 @@ public class LibraryService {
     public void deleteBook(String bookId) {
         Book book = bookRepository.findById(bookId)
                 .orElseThrow(() -> new BookNotFoundException(bookId));
-        log.info("Deleting book: id={}, slug={}", bookId, book.getSlug());
+        log.info("Deleting book: id={}, slug={}, status={}", bookId, book.getSlug(), book.getProcessingStatus());
 
-        // Delete book file and chapter files from S3
+        // Always try to delete the original UUID-based upload file
+        // This stops any in-progress Lambda processing
+        try {
+            String originalKey = BOOK_KEY_PREFIX + bookId + ".txt";
+            storageService.deleteFile(originalKey);
+            log.info("Deleted original upload file from S3: key={}", originalKey);
+        } catch (Exception e) {
+            log.debug("Original upload file not found (may have been moved): bookId={}", bookId);
+        }
+
+        // Delete slug-based book file and chapter files from S3
         if (book.getSlug() != null) {
             try {
                 // Delete the main book file

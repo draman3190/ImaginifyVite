@@ -29,10 +29,23 @@ export function LibraryPage({ refreshTrigger, onRefreshNeeded }: LibraryPageProp
   const handleDeleteConfirm = async () => {
     if (!deleteTarget) return;
     setIsDeleting(true);
+
+    // Track start time to ensure minimum display of "Deleting..." state
+    const startTime = Date.now();
+    const MIN_DELETING_DISPLAY_MS = 500;
+
     try {
       await deleteBook(deleteTarget.id);
+
+      // Ensure "Deleting..." shows for at least MIN_DELETING_DISPLAY_MS
+      const elapsed = Date.now() - startTime;
+      if (elapsed < MIN_DELETING_DISPLAY_MS) {
+        await new Promise((resolve) => setTimeout(resolve, MIN_DELETING_DISPLAY_MS - elapsed));
+      }
+
       // Notify parent to refresh other pages
       onRefreshNeeded?.();
+
       // Show success state briefly before closing
       setIsDeleting(false);
       setIsDeleted(true);
