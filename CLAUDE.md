@@ -98,24 +98,39 @@ npm run preview          # preview production build locally
 api/
   client.ts              Fetch wrapper with base URL, RFC 7807 error handling
   libraryApi.ts          fetchBooks, deleteBook, initiateUpload, uploadFileToS3
-  imageApi.ts            generateImages (placeholder, not called from UI yet)
+  readerApi.ts           fetchBookDetail, fetchChapterContent
 types/
-  book.ts                BookSummary, PresignedUploadUrlResponse, GenerateImagesResponse
+  book.ts                BookSummary, BookDetail, ChapterContent, ChapterSummary
 components/
-  BookLibrary.tsx        Main page: header, responsive grid, loading/error/empty states
-  BookCard.tsx           Book card with metadata, status badge, Download/Delete buttons
+  Layout.tsx             App shell with tab navigation (My Books, Library, Reader)
+  BookLibrary.tsx        Main container: tab routing, URL-based navigation
+  MyBooksPage.tsx        Card grid view of books with upload modal
+  LibraryPage.tsx        Table view with detailed book metadata
+  ReaderPage.tsx         Book selection grid for e-reader (filters by completed status)
+  ChapterReader.tsx      E-reader with pagination, chapter navigation, fullscreen mode
+  BookCard.tsx           Book card with metadata, status badge, progress indicators
   UploadBookModal.tsx    File picker + two-step presigned URL upload flow
   DeleteConfirmModal.tsx Styled confirmation dialog (React portal, dark theme)
-  StatusBadge.tsx        Color-coded processing status pill
-  EmptyState.tsx         Shown when library is empty
 hooks/
-  useBooks.ts            Fetch, refresh, delete books with optimistic updates
-App.tsx                  Renders BookLibrary
+  useBooks.ts            Fetch, refresh, delete books with optimistic updates + polling
+App.tsx                  Renders Layout
 ```
 
-- **Upload flow**: (1) `POST /library/books/upload-url?filename=X` gets presigned URL, (2) PUT file directly to S3. The S3 bucket has CORS configured to allow browser PUT requests.
-- **Download Images button**: Present but disabled ("Coming soon") — backend image generation pipeline is not yet implemented.
-- **API fields**: Backend may return `null` for `authors` and `genre` arrays; frontend handles this with null coalescing.
+**Key patterns:**
+- **Tab routing**: URL-based (`/`, `/library`, `/reader/{bookId}/{chapter}`) with `window.history.replaceState`
+- **Cross-page sync**: `refreshTrigger` prop propagates delete/update events between tabs
+- **Optimistic updates**: `useBooks` removes items immediately, rolls back on error
+- **Polling**: Auto-polls every 3s when any book has `imageStatus === 'GENERATING'`
+- **Reader access**: Books must have both `processingStatus === 'COMPLETED'` AND `imageStatus === 'COMPLETED'`
+
+**ChapterReader features:**
+- Pagination: ~300 words per page with natural paragraph/sentence breaks
+- Chapter navigation: Dropdown selector, prev/next buttons, keyboard arrows
+- Fullscreen mode: Press `F` to toggle, `ESC` to exit, dark immersive background
+- Prefetching: Loads adjacent chapters when near page boundaries
+- Deep linking: `/reader/{bookId}/{chapterNumber}` URLs
+
+**Delete modal fix**: Modal renders outside early-return conditions to show "Deleting..." state even when optimistic removal empties the list.
 
 ### Backend Package Structure (`com.imaginify`)
 
@@ -124,23 +139,30 @@ controller/          REST endpoints (ImageGenerationController, LibraryControlle
 service/             Business logic orchestration
   TextParsingService      Extracts metadata + chapters from text files
   SegmentDetectionService Splits chapters into reading segments
-  client/                 AI provider interface + implementations (Gemini, Grok)
-handler/             Lambda event handlers (BookUploadEventHandler)
+  ChapterSummaryService   AI-powered chapter summarization (Gemini)
+  PromptTemplateService   Builds image generation prompts
+  QualityAssuranceService 3-layer image validation
+  ImageFormattingService  Collage extraction, resize, format conversion
+  client/                 AI provider clients (GeminiTextClient, HuggingFaceImageClient)
+handler/             Lambda event handlers
+  BookUploadEventHandler       Processes uploads, triggers image generation
+  ImageGenerationEventHandler  Async image generation with QA retries
 repository/          DynamoDB data access (BookRepository)
 config/              AWS SDK bean configuration (AwsConfig, DynamoDbConfig)
-model/               Domain entities: Book, Chapter, Segment, ImageMetadata
+model/               Domain entities: Book, Chapter, Segment, ImageMetadata, ImageStatus
 dto/                 Request/response DTOs (separate from domain models)
 exception/           Custom exceptions + GlobalExceptionHandler (@RestControllerAdvice)
 ```
 
 ### API Endpoints
 
-- `POST /images/generate` — trigger image generation for a book (accepts `bookId`)
-- `GET /library/books` — list all books
-- `GET /library/books/{bookId}` — get book by ID
-- `GET /library/books/search?query=` — search books
-- `POST /library/books` — upload a book
-- `DELETE /library/books/{bookId}` — delete a book
+- `GET /library/books` — list all books (returns `BookSummaryResponse[]`)
+- `GET /library/books/{bookId}` — get book by ID (returns `BookResponse` with chapters)
+- `GET /library/books/{bookId}/chapters/{chapterNumber}` — get chapter content for e-reader
+- `GET /library/books/search?query=` — search books by title/author
+- `POST /library/books/upload-url?filename=X` — initiate upload, get presigned S3 URL
+- `DELETE /library/books/{bookId}` — delete book and associated S3 files
+- `POST /images/generate` — manually trigger image generation (usually auto-triggered)
 
 ### Image Generation Pipeline
 
@@ -167,9 +189,10 @@ Single parameterized stack class instantiated per stage (beta, gamma, prod). Eac
 - **Lambda Alias** — `live` alias pointing to current published version (required for SnapStart)
 - **HTTP API Gateway** — `imaginify-api-{stage}`, catch-all `/{proxy+}` route to Lambda, CORS enabled
 - **CloudWatch Log Group** — `/aws/lambda/imaginify-backend-{stage}`, 1-week retention (beta/gamma), 6-month retention (prod)
-- **Event Handler Lambda** — `imaginify-event-handler-{stage}`, Java 21 runtime, plain Lambda handler (no Web Adapter), triggered by S3 PutObject events on `books/*.txt`
-- **Event Handler IAM Role** — `imaginify-event-handler-role-{stage}`, least-privilege: DynamoDB GetItem/PutItem, S3 GetObject on `books/*`, CloudWatch Logs
-- **Event Handler Log Group** — `/aws/lambda/imaginify-event-handler-{stage}`, same retention as backend
+- **Event Handler Lambda** — `imaginify-event-handler-{stage}`, Java 21 runtime, S3-triggered on `books/*.txt`
+- **Image Generation Lambda** — `imaginify-image-gen-{stage}`, Java 21 runtime, async-invoked by event handler
+- **Event Handler IAM Role** — DynamoDB read/write, S3 read/write on `books/*`, invoke image generation Lambda
+- **Image Gen IAM Role** — DynamoDB read/write, S3 write on `books/*/images/*`, Secrets Manager read
 
 Stage differences:
 - prod uses `RETAIN` removal policy; beta and gamma use `DESTROY` with `autoDeleteObjects` enabled on S3
@@ -195,26 +218,50 @@ Extracts metadata and chapter structure from uploaded text files:
 
 **Segment detection** (`SegmentDetectionService`): Splits chapters into 2-3 page reading chunks with natural pause points for image generation.
 
-### Book Upload Event Processing
+### Book Processing Pipeline
 
-When a `.txt` file is uploaded to the `books/` prefix in S3, an event notification triggers `BookUploadEventHandler` — a lightweight Lambda (plain Java, no Spring Boot). It downloads the file, parses metadata and chapters via `TextParsingService`, detects reading segments, and updates the DynamoDB book record. This eliminates the need for clients to call `POST /confirm-upload` (kept as manual fallback).
+When a `.txt` file is uploaded to the `books/` prefix in S3:
 
 ```
-S3 PutObject (books/*.txt) → Event Notification → BookUploadEventHandler Lambda → DynamoDB
+S3 PutObject (books/*.txt) → BookUploadEventHandler → ImageGenerationEventHandler → DynamoDB
 ```
 
-- **Idempotency**: Uses DynamoDB conditional PutItem (`processingStatus = PENDING_UPLOAD`) for atomic claim. Duplicate S3 events are safely skipped.
-- **Error handling**: On failure, sets `processingStatus = FAILED` and logs the error. Does not rethrow to avoid infinite Lambda retries.
-- **Packaging**: Separate lean ZIP (`build/event-handler/event-handler.zip`) with only AWS SDK + Lambda runtime deps — no Spring JARs.
+**BookUploadEventHandler** (plain Java Lambda):
+1. Downloads file, parses metadata/chapters via `TextParsingService`
+2. Generates chapter summaries via `ChapterSummaryService` (uses Gemini API)
+3. Uploads chapter text to S3 (`books/{slug}/chapters/01.txt`, etc.)
+4. Sets `processingStatus = COMPLETED`
+5. Auto-triggers `ImageGenerationEventHandler` via async Lambda invocation
+
+**ImageGenerationEventHandler** (plain Java Lambda):
+1. Builds prompts via `PromptTemplateService`
+2. Generates images via `HuggingFaceImageClient` (FLUX model)
+3. Validates via `QualityAssuranceService` (retries up to 5x on QA failure)
+4. Stores images to S3, updates chapter `images[]` metadata
+5. Sets `imageStatus = COMPLETED`
+
+**Key patterns:**
+- **Idempotency**: Conditional PutItem (`processingStatus = PENDING_UPLOAD`) for atomic claim
+- **Deletion safety**: All `putItem` calls use `attribute_exists(bookId)` condition to prevent re-creating deleted books. If book is deleted mid-processing, handlers abort gracefully.
+- **Incremental saves**: Progress saved after each chapter for resumability
+- **Error handling**: Sets status to `FAILED`, does not rethrow to avoid Lambda retries
+- **Packaging**: Lean ZIP with AWS SDK + Lambda deps only (no Spring JARs)
 
 ### Deployment Architecture
 
 ```
-Client → HTTP API Gateway → Lambda (Web Adapter Layer + Spring Boot JAR) → DynamoDB/S3/SecretsManager
-S3 PutObject (books/*.txt) → Event Handler Lambda (plain Java) → DynamoDB
+Client → HTTP API Gateway → Lambda (Web Adapter + Spring Boot) → DynamoDB/S3/SecretsManager
+
+S3 PutObject (books/*.txt) → BookUploadEventHandler Lambda ─┬→ DynamoDB
+                                                             └→ ImageGenerationEventHandler Lambda → S3/DynamoDB
 ```
 
-The backend runs in Lambda using the [AWS Lambda Web Adapter](https://github.com/awslabs/aws-lambda-web-adapter). This is a Lambda Layer that runs the Spring Boot app inside Lambda and proxies API Gateway HTTP requests to it. **Zero changes to backend Java code are needed** — `./gradlew bootRun` for local development continues to work unchanged.
+**Three Lambda functions:**
+1. **Backend Lambda** — Spring Boot via AWS Lambda Web Adapter, handles API requests
+2. **BookUploadEventHandler** — S3-triggered, processes book text, invokes image generation
+3. **ImageGenerationEventHandler** — Async-invoked, generates and stores images
+
+The backend runs using the [AWS Lambda Web Adapter](https://github.com/awslabs/aws-lambda-web-adapter) layer. **Zero changes to backend Java code needed** — `./gradlew bootRun` works unchanged for local dev.
 
 Environment variables are set on the Lambda function to configure resource names:
 - `AWS_DYNAMODB_TABLE_NAME` — DynamoDB table name
@@ -240,12 +287,19 @@ To build the backend JAR and event handler ZIP independently: `npm run build:bac
 ### Data Layer
 
 - **DynamoDB**: `imaginify-books` table, partition key `bookId`
-  - Book: bookId, title, authors[], genre[], language, processingStatus, uploadTimestamp, chapters[]
-  - Chapter: chapterNumber, title, startOffset, textLength, segments[], images[] (text stored in S3, not DynamoDB)
+  - Book: bookId, slug, title, authors[], genre[], language, processingStatus, imageStatus, uploadTimestamp, chapters[]
+  - Chapter: chapterNumber, title, chapterType (CONTENT|TRANSITION), startOffset, textLength, summary, segments[], images[]
   - Segment: segmentNumber, startOffset, endOffset, images[]
-  - Optional fields (not yet populated): publisher, isbn, description, tone, artStyle, pageCount
-- **S3**: `imaginify-images` bucket for generated images; book text files at `books/{bookId}.txt`
-- **Secrets Manager**: `imaginify/api-keys` for AI provider API keys
+  - ImageMetadata: id, url, provider, width, height, format, createdAt, type
+  - **Status fields**:
+    - `processingStatus`: PENDING_UPLOAD → PROCESSING → COMPLETED | FAILED
+    - `imageStatus`: NOT_STARTED → GENERATING → COMPLETED | FAILED
+- **S3 paths**:
+  - Upload: `books/{uuid}.txt` (temporary, moved after processing)
+  - Book file: `books/{slug}/book.txt`
+  - Chapters: `books/{slug}/chapters/01.txt`, `02.txt`, etc.
+  - Images: `books/{slug}/images/chapter_01/001.png`, etc.
+- **Secrets Manager**: `imaginify/api-keys` with `GEMINI_API_KEY`, `HUGGINGFACE_API_KEY`
 - **Region**: us-east-1
 
 ### Key Design Decisions
