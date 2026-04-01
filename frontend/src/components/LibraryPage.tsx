@@ -18,6 +18,7 @@ export function LibraryPage({ refreshTrigger, onRefreshNeeded }: LibraryPageProp
   }, [refreshTrigger, refresh]);
   const [deleteTarget, setDeleteTarget] = useState<{ id: string; title: string } | null>(null);
   const [isDeleting, setIsDeleting] = useState(false);
+  const [isDeleted, setIsDeleted] = useState(false);
   const [openMenuId, setOpenMenuId] = useState<string | null>(null);
 
   const handleDeleteClick = (bookId: string, title: string) => {
@@ -32,7 +33,14 @@ export function LibraryPage({ refreshTrigger, onRefreshNeeded }: LibraryPageProp
       await deleteBook(deleteTarget.id);
       // Notify parent to refresh other pages
       onRefreshNeeded?.();
-    } finally {
+      // Show success state briefly before closing
+      setIsDeleting(false);
+      setIsDeleted(true);
+      setTimeout(() => {
+        setIsDeleted(false);
+        setDeleteTarget(null);
+      }, 800);
+    } catch {
       setIsDeleting(false);
       setDeleteTarget(null);
     }
@@ -201,6 +209,7 @@ export function LibraryPage({ refreshTrigger, onRefreshNeeded }: LibraryPageProp
         <DeleteConfirmModal
           bookTitle={deleteTarget.title}
           isDeleting={isDeleting}
+          isDeleted={isDeleted}
           onConfirm={handleDeleteConfirm}
           onCancel={() => setDeleteTarget(null)}
         />
