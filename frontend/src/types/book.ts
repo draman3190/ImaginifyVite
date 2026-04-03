@@ -41,6 +41,13 @@ export interface BookDetail {
   chapters: ChapterSummary[];
 }
 
+export interface ChapterImage {
+  id: string;
+  url: string;
+  width: number;
+  height: number;
+}
+
 export interface ChapterContent {
   bookId: string;
   chapterNumber: number;
@@ -51,4 +58,5 @@ export interface ChapterContent {
   totalChapters: number;
   hasPrevious: boolean;
   hasNext: boolean;
+  images: ChapterImage[];
 }

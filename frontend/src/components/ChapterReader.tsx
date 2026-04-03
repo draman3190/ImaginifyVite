@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import { fetchBookDetail, fetchChapterContent } from '../api/readerApi';
-import type { BookDetail, ChapterContent, ChapterSummary } from '../types/book';
+import type { BookDetail, ChapterContent, ChapterSummary, ChapterImage } from '../types/book';
 
 interface ChapterReaderProps {
   bookId: string;
@@ -92,6 +92,8 @@ export function ChapterReader({ bookId, initialChapter, onBack }: ChapterReaderP
   const [error, setError] = useState<string | null>(null);
   const [showChapterDropdown, setShowChapterDropdown] = useState(false);
   const [isFullscreen, setIsFullscreen] = useState(false);
+  const [showImagePanel, setShowImagePanel] = useState(false);
+  const [selectedImage, setSelectedImage] = useState<ChapterImage | null>(null);
 
   // Container ref for fullscreen
   const containerRef = useRef<HTMLDivElement>(null);
@@ -370,6 +372,24 @@ export function ChapterReader({ bookId, initialChapter, onBack }: ChapterReaderP
             )}
           </div>
 
+          {/* Image panel toggle */}
+          {chapter?.images && chapter.images.length > 0 && (
+            <button
+              onClick={() => setShowImagePanel(!showImagePanel)}
+              className={`flex items-center text-sm transition-all cursor-pointer px-2 py-1 rounded border ${
+                showImagePanel
+                  ? 'text-ethereal-300 border-ethereal-400/50 shadow-[0_0_15px_rgba(251,191,36,0.3)]'
+                  : 'text-text-secondary hover:text-cosmic-300 border-transparent hover:border-cosmic-400/30 hover:shadow-[0_0_10px_rgba(139,92,246,0.15)]'
+              }`}
+              title={showImagePanel ? 'Hide illustrations' : 'Show illustrations'}
+            >
+              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M2.25 15.75l5.159-5.159a2.25 2.25 0 013.182 0l5.159 5.159m-1.5-1.5l1.409-1.409a2.25 2.25 0 013.182 0l2.909 2.909m-18 3.75h16.5a1.5 1.5 0 001.5-1.5V6a1.5 1.5 0 00-1.5-1.5H3.75A1.5 1.5 0 002.25 6v12a1.5 1.5 0 001.5 1.5zm10.5-11.25h.008v.008h-.008V8.25zm.375 0a.375.375 0 11-.75 0 .375.375 0 01.75 0z" />
+              </svg>
+              <span className="ml-1.5 text-xs">{chapter.images.length}</span>
+            </button>
+          )}
+
           {/* Fullscreen toggle */}
           <button
             onClick={toggleFullscreen}
@@ -389,17 +409,55 @@ export function ChapterReader({ bookId, initialChapter, onBack }: ChapterReaderP
         </div>
       </div>
 
-      {/* Reading area */}
-      <div className="flex-1 overflow-y-auto px-4 sm:px-8 lg:px-16 py-6">
-        {chapter && (
-          <div className="max-w-2xl mx-auto">
-            {currentPage === 0 && chapter.title && (
-              <h3 className="text-xl font-semibold text-text-primary mb-6 text-center">
-                {chapter.title}
-              </h3>
-            )}
-            <div className="text-text-primary leading-relaxed whitespace-pre-wrap text-base sm:text-lg">
-              {pages[currentPage]}
+      {/* Main content area with optional image panel */}
+      <div className="flex-1 flex overflow-hidden">
+        {/* Reading area */}
+        <div className={`flex-1 overflow-y-auto px-4 sm:px-8 py-6 transition-all duration-300 ${
+          showImagePanel ? 'lg:pr-4' : 'lg:px-16'
+        }`}>
+          {chapter && (
+            <div className={`mx-auto ${showImagePanel ? 'max-w-xl' : 'max-w-2xl'}`}>
+              {currentPage === 0 && chapter.title && (
+                <h3 className="text-xl font-semibold text-text-primary mb-6 text-center">
+                  {chapter.title}
+                </h3>
+              )}
+              <div className="text-text-primary leading-relaxed whitespace-pre-wrap text-base sm:text-lg">
+                {pages[currentPage]}
+              </div>
+            </div>
+          )}
+        </div>
+
+        {/* Image panel */}
+        {showImagePanel && chapter?.images && chapter.images.length > 0 && (
+          <div className="w-80 border-l border-white/10 bg-surface/50 overflow-y-auto p-4 hidden lg:block">
+            <div className="flex items-center justify-between mb-4">
+              <h4 className="text-sm font-medium text-text-primary">Illustrations</h4>
+              <button
+                onClick={() => setShowImagePanel(false)}
+                className="text-text-muted hover:text-text-secondary transition-colors cursor-pointer"
+              >
+                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                </svg>
+              </button>
+            </div>
+            <div className="space-y-3">
+              {chapter.images.map((img, index) => (
+                <button
+                  key={img.id}
+                  onClick={() => setSelectedImage(img)}
+                  className="w-full rounded-lg overflow-hidden border border-white/10 hover:border-cosmic-400/50 hover:shadow-[0_0_15px_rgba(139,92,246,0.2)] transition-all cursor-pointer"
+                >
+                  <img
+                    src={img.url}
+                    alt={`Illustration ${index + 1}`}
+                    className="w-full h-auto object-cover"
+                    loading="lazy"
+                  />
+                </button>
+              ))}
             </div>
           </div>
         )}
@@ -449,6 +507,29 @@ export function ChapterReader({ bookId, initialChapter, onBack }: ChapterReaderP
 
       {showChapterDropdown && (
         <div className="fixed inset-0 z-40" onClick={() => setShowChapterDropdown(false)} />
+      )}
+
+      {/* Image lightbox */}
+      {selectedImage && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/90 backdrop-blur-sm"
+          onClick={() => setSelectedImage(null)}
+        >
+          <button
+            onClick={() => setSelectedImage(null)}
+            className="absolute top-4 right-4 p-2 text-white/70 hover:text-white transition-colors cursor-pointer"
+          >
+            <svg className="w-8 h-8" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+            </svg>
+          </button>
+          <img
+            src={selectedImage.url}
+            alt="Full size illustration"
+            className="max-w-[90vw] max-h-[90vh] object-contain rounded-lg shadow-2xl"
+            onClick={(e) => e.stopPropagation()}
+          />
+        </div>
       )}
     </div>
   );

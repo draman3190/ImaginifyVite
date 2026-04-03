@@ -272,6 +272,25 @@ public class LibraryService {
         String chapterKey = String.format("books/%s/chapters/%02d.txt", book.getSlug(), chapterNumber);
         String content = storageService.downloadText(chapterKey);
 
+        // Convert S3 URLs to presigned download URLs for images
+        List<ChapterContentResponse.ImageResponse> images = new ArrayList<>();
+        if (chapter.getImages() != null) {
+            for (var img : chapter.getImages()) {
+                String s3Url = img.getUrl();
+                if (s3Url != null && s3Url.startsWith("s3://")) {
+                    // Extract key from s3://bucket/key format
+                    String key = s3Url.substring(s3Url.indexOf('/', 5) + 1);
+                    String presignedUrl = storageService.generatePresignedDownloadUrl(key);
+                    images.add(new ChapterContentResponse.ImageResponse(
+                            img.getId(),
+                            presignedUrl,
+                            img.getWidth(),
+                            img.getHeight()
+                    ));
+                }
+            }
+        }
+
         return new ChapterContentResponse(
                 bookId,
                 chapterNumber,
@@ -281,7 +300,8 @@ public class LibraryService {
                 chapter.getTextLength(),
                 totalChapters,
                 chapterNumber > 1,
-                chapterNumber < totalChapters
+                chapterNumber < totalChapters,
+                images
         );
     }
 
