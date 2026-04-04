@@ -120,7 +120,6 @@ export function ChapterReader({ bookId, initialChapter, onBack }: ChapterReaderP
   const [error, setError] = useState<string | null>(null);
   const [showChapterDropdown, setShowChapterDropdown] = useState(false);
   const [isFullscreen, setIsFullscreen] = useState(false);
-  const [selectedImage, setSelectedImage] = useState<ChapterImage | null>(null);
 
   // Dictionary popup state
   const [dictionaryPopup, setDictionaryPopup] = useState<DictionaryPopupState | null>(null);
@@ -142,6 +141,9 @@ export function ChapterReader({ bookId, initialChapter, onBack }: ChapterReaderP
 
   // Ref for selection timeout to persist across re-renders
   const selectionTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  // Ref for detecting double-clicks to skip purple "selecting" state
+  const lastMouseDownTimeRef = useRef<number>(0);
 
   // Prevent duplicate chapter loads
   const loadingChapterRef = useRef<number | null>(null);
@@ -333,10 +335,20 @@ export function ChapterReader({ bookId, initialChapter, onBack }: ChapterReaderP
     const cleanWord = word.toLowerCase().replace(/[^a-z'-]/g, '').trim();
     if (!cleanWord || cleanWord.length < 2) return;
 
+    // Convert viewport coordinates to container-relative coordinates
+    const readingArea = readingAreaRef.current;
+    let relativeX = x;
+    let relativeY = y;
+    if (readingArea) {
+      const containerRect = readingArea.getBoundingClientRect();
+      relativeX = x - containerRect.left + readingArea.scrollLeft;
+      relativeY = y - containerRect.top + readingArea.scrollTop;
+    }
+
     setDictionaryPopup({
       word: cleanWord,
-      x,
-      y,
+      x: relativeX,
+      y: relativeY,
       loading: true,
       error: null,
       entry: null,
@@ -416,18 +428,21 @@ export function ChapterReader({ bookId, initialChapter, onBack }: ChapterReaderP
     const updateBubbles = () => {
       const selection = window.getSelection();
       const selectedText = selection?.toString();
+      const readingArea = readingAreaRef.current;
 
-      if (selectedText && selection?.rangeCount) {
+      if (selectedText && selection?.rangeCount && readingArea) {
         const range = selection.getRangeAt(0);
         const rects = range.getClientRects();
+        const containerRect = readingArea.getBoundingClientRect();
         const bubbles: Array<{ x: number; y: number; width: number; height: number }> = [];
 
         for (let i = 0; i < rects.length; i++) {
           const rect = rects[i];
           if (rect.width > 0 && rect.height > 0) {
+            // Convert viewport coordinates to container-relative coordinates
             bubbles.push({
-              x: rect.left,
-              y: rect.top,
+              x: rect.left - containerRect.left + readingArea.scrollLeft,
+              y: rect.top - containerRect.top + readingArea.scrollTop,
               width: rect.width,
               height: rect.height,
             });
@@ -440,6 +455,15 @@ export function ChapterReader({ bookId, initialChapter, onBack }: ChapterReaderP
     };
 
     const handleMouseDown = () => {
+      const now = Date.now();
+      const timeSinceLastClick = now - lastMouseDownTimeRef.current;
+      lastMouseDownTimeRef.current = now;
+
+      // Skip purple "selecting" state for double-clicks (selection is instant)
+      if (timeSinceLastClick < 300) {
+        return;
+      }
+
       setIsSelecting(true);
     };
 
@@ -699,30 +723,28 @@ export function ChapterReader({ bookId, initialChapter, onBack }: ChapterReaderP
             {/* Chapter illustration - shown on first page */}
             {currentPage === 0 && chapter.images && chapter.images.length > 0 && (
               <div className="mb-8">
-                <button
-                  onClick={() => setSelectedImage(chapter.images[0])}
-                  className="w-full max-w-md mx-auto block rounded-lg overflow-hidden border border-white/10 hover:border-cosmic-400/50 hover:shadow-[0_0_20px_rgba(139,92,246,0.25)] transition-all cursor-pointer"
-                >
+                <div className="w-full max-w-md mx-auto rounded-lg overflow-hidden border border-white/10">
                   <img
                     src={chapter.images[0].url}
                     alt={`Illustration for ${chapter.title}`}
-                    className="w-full h-auto object-cover"
+                    className="w-full h-auto object-cover select-none pointer-events-none"
+                    draggable={false}
                   />
-                </button>
+                </div>
                 {chapter.images.length > 1 && (
                   <div className="flex justify-center gap-2 mt-3">
                     {chapter.images.map((img, index) => (
-                      <button
+                      <div
                         key={img.id}
-                        onClick={() => setSelectedImage(img)}
-                        className="w-12 h-12 rounded overflow-hidden border border-white/10 hover:border-cosmic-400/50 transition-all cursor-pointer"
+                        className="w-12 h-12 rounded overflow-hidden border border-white/10"
                       >
                         <img
                           src={img.url}
                           alt={`Thumbnail ${index + 1}`}
-                          className="w-full h-full object-cover"
+                          className="w-full h-full object-cover select-none pointer-events-none"
+                          draggable={false}
                         />
-                      </button>
+                      </div>
                     ))}
                   </div>
                 )}
@@ -733,6 +755,89 @@ export function ChapterReader({ bookId, initialChapter, onBack }: ChapterReaderP
             <div className="text-text-primary leading-relaxed whitespace-pre-wrap text-base sm:text-lg">
               {pages[currentPage]}
             </div>
+          </div>
+        )}
+
+        {/* Selection bubble highlights - rendered inside reading area for scroll attachment */}
+        {selectionBubbles.map((bubble, index) => (
+          <div
+            key={index}
+            className={`absolute pointer-events-none z-40 rounded-lg transition-colors duration-150 ${
+              isSelecting
+                ? 'bg-cosmic-500/25 border border-cosmic-400/40 shadow-[0_0_8px_rgba(139,92,246,0.3)]'
+                : 'bg-ethereal-500/25 border border-ethereal-400/40 shadow-[0_0_8px_rgba(251,191,36,0.3)]'
+            }`}
+            style={{
+              left: bubble.x - 3,
+              top: bubble.y - 1,
+              width: bubble.width + 6,
+              height: bubble.height + 2,
+            }}
+          />
+        ))}
+
+        {/* Dictionary popup - rendered inside reading area for scroll attachment */}
+        {dictionaryPopup && (
+          <div
+            className="dictionary-popup absolute z-50 max-w-xs bg-surface border border-ethereal-400/30 rounded-lg shadow-xl shadow-ethereal-500/20 p-3"
+            style={{
+              left: Math.max(160, Math.min(dictionaryPopup.x, (readingAreaRef.current?.clientWidth || 400) - 160)),
+              top: Math.max(20, dictionaryPopup.y - 10),
+              transform: 'translate(-50%, -100%)',
+            }}
+          >
+            {/* Arrow pointing down */}
+            <div className="absolute left-1/2 -bottom-2 -translate-x-1/2 w-0 h-0 border-l-8 border-r-8 border-t-8 border-l-transparent border-r-transparent border-t-ethereal-400/30" />
+
+            {/* Close button */}
+            <button
+              onClick={closeDictionaryPopup}
+              className="absolute top-1 right-1 p-1 text-text-muted hover:text-text-secondary transition-colors cursor-pointer"
+            >
+              <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+              </svg>
+            </button>
+
+            {dictionaryPopup.loading ? (
+              <div className="flex items-center gap-2 py-2">
+                <div className="w-4 h-4 border-2 border-cosmic-400 border-t-transparent rounded-full animate-spin" />
+                <span className="text-sm text-text-muted">Looking up "{dictionaryPopup.word}"...</span>
+              </div>
+            ) : dictionaryPopup.error ? (
+              <div className="py-1">
+                <p className="text-sm text-text-muted">{dictionaryPopup.error}</p>
+              </div>
+            ) : dictionaryPopup.entry ? (
+              <div className="pr-4">
+                {/* Word and phonetic */}
+                <div className="mb-2">
+                  <span className="text-base font-semibold text-ethereal-300">{dictionaryPopup.entry.word}</span>
+                  {dictionaryPopup.entry.phonetic && (
+                    <span className="ml-2 text-sm text-text-muted">{dictionaryPopup.entry.phonetic}</span>
+                  )}
+                </div>
+
+                {/* Meanings */}
+                <div className="space-y-2 max-h-48 overflow-y-auto">
+                  {dictionaryPopup.entry.meanings.map((meaning, idx) => (
+                    <div key={idx}>
+                      <span className="text-xs font-medium text-cosmic-300 italic">{meaning.partOfSpeech}</span>
+                      <ol className="mt-1 space-y-1 pl-4 list-decimal list-outside">
+                        {meaning.definitions.slice(0, 2).map((def, defIdx) => (
+                          <li key={defIdx} className="text-sm text-text-secondary">
+                            {def.definition}
+                            {def.example && (
+                              <p className="text-xs text-text-muted mt-0.5 italic">"{def.example}"</p>
+                            )}
+                          </li>
+                        ))}
+                      </ol>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            ) : null}
           </div>
         )}
       </div>
@@ -781,111 +886,6 @@ export function ChapterReader({ bookId, initialChapter, onBack }: ChapterReaderP
 
       {showChapterDropdown && (
         <div className="fixed inset-0 z-40" onClick={() => setShowChapterDropdown(false)} />
-      )}
-
-      {/* Image lightbox */}
-      {selectedImage && (
-        <div
-          className="fixed inset-0 z-50 flex items-center justify-center bg-black/90 backdrop-blur-sm"
-          onClick={() => setSelectedImage(null)}
-        >
-          <button
-            onClick={() => setSelectedImage(null)}
-            className="absolute top-4 right-4 p-2 text-white/70 hover:text-white transition-colors cursor-pointer"
-          >
-            <svg className="w-8 h-8" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-            </svg>
-          </button>
-          <img
-            src={selectedImage.url}
-            alt="Full size illustration"
-            className="max-w-[90vw] max-h-[90vh] object-contain rounded-lg shadow-2xl"
-            onClick={(e) => e.stopPropagation()}
-          />
-        </div>
-      )}
-
-      {/* Selection bubble highlights */}
-      {selectionBubbles.map((bubble, index) => (
-        <div
-          key={index}
-          className={`fixed pointer-events-none z-40 rounded-lg transition-colors duration-150 ${
-            isSelecting
-              ? 'bg-cosmic-500/25 border border-cosmic-400/40 shadow-[0_0_8px_rgba(139,92,246,0.3)]'
-              : 'bg-ethereal-500/25 border border-ethereal-400/40 shadow-[0_0_8px_rgba(251,191,36,0.3)]'
-          }`}
-          style={{
-            left: bubble.x - 3,
-            top: bubble.y - 1,
-            width: bubble.width + 6,
-            height: bubble.height + 2,
-          }}
-        />
-      ))}
-
-      {/* Dictionary popup */}
-      {dictionaryPopup && (
-        <div
-          className="dictionary-popup fixed z-50 max-w-xs bg-surface border border-ethereal-400/30 rounded-lg shadow-xl shadow-ethereal-500/20 p-3 transform -translate-x-1/2 -translate-y-full"
-          style={{
-            left: Math.max(160, Math.min(dictionaryPopup.x, window.innerWidth - 160)),
-            top: Math.max(100, dictionaryPopup.y),
-          }}
-        >
-          {/* Arrow pointing down */}
-          <div className="absolute left-1/2 -bottom-2 -translate-x-1/2 w-0 h-0 border-l-8 border-r-8 border-t-8 border-l-transparent border-r-transparent border-t-ethereal-400/30" />
-
-          {/* Close button */}
-          <button
-            onClick={closeDictionaryPopup}
-            className="absolute top-1 right-1 p-1 text-text-muted hover:text-text-secondary transition-colors cursor-pointer"
-          >
-            <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-            </svg>
-          </button>
-
-          {dictionaryPopup.loading ? (
-            <div className="flex items-center gap-2 py-2">
-              <div className="w-4 h-4 border-2 border-cosmic-400 border-t-transparent rounded-full animate-spin" />
-              <span className="text-sm text-text-muted">Looking up "{dictionaryPopup.word}"...</span>
-            </div>
-          ) : dictionaryPopup.error ? (
-            <div className="py-1">
-              <p className="text-sm text-text-muted">{dictionaryPopup.error}</p>
-            </div>
-          ) : dictionaryPopup.entry ? (
-            <div className="pr-4">
-              {/* Word and phonetic */}
-              <div className="mb-2">
-                <span className="text-base font-semibold text-ethereal-300">{dictionaryPopup.entry.word}</span>
-                {dictionaryPopup.entry.phonetic && (
-                  <span className="ml-2 text-sm text-text-muted">{dictionaryPopup.entry.phonetic}</span>
-                )}
-              </div>
-
-              {/* Meanings */}
-              <div className="space-y-2 max-h-48 overflow-y-auto">
-                {dictionaryPopup.entry.meanings.map((meaning, idx) => (
-                  <div key={idx}>
-                    <span className="text-xs font-medium text-cosmic-300 italic">{meaning.partOfSpeech}</span>
-                    <ol className="mt-1 space-y-1 pl-4 list-decimal list-outside">
-                      {meaning.definitions.slice(0, 2).map((def, defIdx) => (
-                        <li key={defIdx} className="text-sm text-text-secondary">
-                          {def.definition}
-                          {def.example && (
-                            <p className="text-xs text-text-muted mt-0.5 italic">"{def.example}"</p>
-                          )}
-                        </li>
-                      ))}
-                    </ol>
-                  </div>
-                ))}
-              </div>
-            </div>
-          ) : null}
-        </div>
       )}
     </div>
   );
