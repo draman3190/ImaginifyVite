@@ -521,7 +521,7 @@ export function ChapterReader({ bookId, initialChapter, onBack }: ChapterReaderP
         }
       };
     }
-  }, [lookupWord]);
+  }, [lookupWord, chapter]); // Re-run when chapter loads to attach listeners to reading area
 
   const goToNextPage = useCallback(() => {
     if (currentPage < totalPages - 1) {
