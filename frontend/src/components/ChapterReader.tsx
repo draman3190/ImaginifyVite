@@ -83,6 +83,32 @@ function splitIntoPages(text: string): string[] {
   return pages.length > 0 ? pages : [''];
 }
 
+// Dictionary types
+interface DictionaryDefinition {
+  definition: string;
+  example?: string;
+}
+
+interface DictionaryMeaning {
+  partOfSpeech: string;
+  definitions: DictionaryDefinition[];
+}
+
+interface DictionaryEntry {
+  word: string;
+  phonetic?: string;
+  meanings: DictionaryMeaning[];
+}
+
+interface DictionaryPopupState {
+  word: string;
+  x: number;
+  y: number;
+  loading: boolean;
+  error: string | null;
+  entry: DictionaryEntry | null;
+}
+
 export function ChapterReader({ bookId, initialChapter, onBack }: ChapterReaderProps) {
   const [book, setBook] = useState<BookDetail | null>(null);
   const [chapter, setChapter] = useState<ChapterContent | null>(null);
@@ -96,8 +122,26 @@ export function ChapterReader({ bookId, initialChapter, onBack }: ChapterReaderP
   const [isFullscreen, setIsFullscreen] = useState(false);
   const [selectedImage, setSelectedImage] = useState<ChapterImage | null>(null);
 
+  // Dictionary popup state
+  const [dictionaryPopup, setDictionaryPopup] = useState<DictionaryPopupState | null>(null);
+
+  // Selection highlight bubble state - array for multi-line selections
+  const [selectionBubbles, setSelectionBubbles] = useState<Array<{
+    x: number;
+    y: number;
+    width: number;
+    height: number;
+  }>>([]);
+
+  // Track if selection is in progress (purple) vs completed (yellow)
+  const [isSelecting, setIsSelecting] = useState(false);
+
   // Container ref for fullscreen
   const containerRef = useRef<HTMLDivElement>(null);
+  const readingAreaRef = useRef<HTMLDivElement>(null);
+
+  // Ref for selection timeout to persist across re-renders
+  const selectionTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   // Prevent duplicate chapter loads
   const loadingChapterRef = useRef<number | null>(null);
@@ -283,6 +327,178 @@ export function ChapterReader({ bookId, initialChapter, onBack }: ChapterReaderP
     };
   }, []);
 
+  // Dictionary lookup function
+  const lookupWord = useCallback(async (word: string, x: number, y: number) => {
+    // Clean the word - remove punctuation and normalize
+    const cleanWord = word.toLowerCase().replace(/[^a-z'-]/g, '').trim();
+    if (!cleanWord || cleanWord.length < 2) return;
+
+    setDictionaryPopup({
+      word: cleanWord,
+      x,
+      y,
+      loading: true,
+      error: null,
+      entry: null,
+    });
+
+    try {
+      const response = await fetch(`https://api.dictionaryapi.dev/api/v2/entries/en/${cleanWord}`);
+      if (!response.ok) {
+        throw new Error('Word not found');
+      }
+      const data = await response.json();
+      if (data && data.length > 0) {
+        setDictionaryPopup(prev => prev ? {
+          ...prev,
+          loading: false,
+          entry: {
+            word: data[0].word,
+            phonetic: data[0].phonetic || data[0].phonetics?.find((p: any) => p.text)?.text,
+            meanings: data[0].meanings.slice(0, 3), // Limit to 3 meanings
+          },
+        } : null);
+      }
+    } catch {
+      setDictionaryPopup(prev => prev ? {
+        ...prev,
+        loading: false,
+        error: 'Definition not found',
+      } : null);
+    }
+  }, []);
+
+  // Clear selection bubbles when popup closes
+  const closeDictionaryPopup = useCallback(() => {
+    setDictionaryPopup(null);
+    setSelectionBubbles([]);
+    window.getSelection()?.removeAllRanges();
+  }, []);
+
+  // Handle text selection for dictionary lookup
+  useEffect(() => {
+    const validateAndShowPopup = () => {
+      const selection = window.getSelection();
+      const selectedText = selection?.toString().trim();
+
+      if (!selectedText) return;
+
+      // Validate it's a single complete word
+      const isValidWord = /^[a-zA-Z][a-zA-Z'-]*[a-zA-Z]$|^[a-zA-Z]{2}$/.test(selectedText);
+      if (!isValidWord) return;
+
+      const range = selection?.getRangeAt(0);
+      if (range) {
+        // Check for partial word selection
+        const startContainer = range.startContainer;
+        if (startContainer.nodeType === Node.TEXT_NODE) {
+          const textContent = startContainer.textContent || '';
+          const startOffset = range.startOffset;
+          if (startOffset > 0 && /[a-zA-Z]/.test(textContent[startOffset - 1])) {
+            return;
+          }
+        }
+
+        const endContainer = range.endContainer;
+        if (endContainer.nodeType === Node.TEXT_NODE) {
+          const textContent = endContainer.textContent || '';
+          const endOffset = range.endOffset;
+          if (endOffset < textContent.length && /[a-zA-Z]/.test(textContent[endOffset])) {
+            return;
+          }
+        }
+
+        const rect = range.getBoundingClientRect();
+        lookupWord(selectedText, rect.left + rect.width / 2, rect.top - 10);
+      }
+    };
+
+    const updateBubbles = () => {
+      const selection = window.getSelection();
+      const selectedText = selection?.toString();
+
+      if (selectedText && selection?.rangeCount) {
+        const range = selection.getRangeAt(0);
+        const rects = range.getClientRects();
+        const bubbles: Array<{ x: number; y: number; width: number; height: number }> = [];
+
+        for (let i = 0; i < rects.length; i++) {
+          const rect = rects[i];
+          if (rect.width > 0 && rect.height > 0) {
+            bubbles.push({
+              x: rect.left,
+              y: rect.top,
+              width: rect.width,
+              height: rect.height,
+            });
+          }
+        }
+        setSelectionBubbles(bubbles);
+      } else {
+        setSelectionBubbles([]);
+      }
+    };
+
+    const handleMouseDown = () => {
+      setIsSelecting(true);
+    };
+
+    const handleMouseUp = (e: MouseEvent) => {
+      if ((e.target as HTMLElement).closest('.dictionary-popup')) return;
+
+      setIsSelecting(false);
+
+      if (selectionTimeoutRef.current) {
+        clearTimeout(selectionTimeoutRef.current);
+      }
+
+      const selection = window.getSelection();
+      const selectedText = selection?.toString().trim();
+
+      if (!selectedText) {
+        setSelectionBubbles([]);
+        setDictionaryPopup(null);
+        return;
+      }
+
+      updateBubbles();
+
+      // Only trigger dictionary lookup for valid single words
+      const isValidSingleWord = /^[a-zA-Z][a-zA-Z'-]*[a-zA-Z]?$/.test(selectedText) && !selectedText.includes(' ');
+      if (isValidSingleWord) {
+        selectionTimeoutRef.current = setTimeout(validateAndShowPopup, 200);
+      }
+    };
+
+    const handleSelectionChange = () => {
+      updateBubbles();
+
+      const selection = window.getSelection();
+      const selectedText = selection?.toString().trim();
+      const isValidWord = selectedText && /^[a-zA-Z][a-zA-Z'-]*[a-zA-Z]$|^[a-zA-Z]{2}$/.test(selectedText) && !selectedText.includes(' ');
+
+      if (!isValidWord && selectionTimeoutRef.current) {
+        clearTimeout(selectionTimeoutRef.current);
+        selectionTimeoutRef.current = null;
+      }
+    };
+
+    const readingArea = readingAreaRef.current;
+    if (readingArea) {
+      readingArea.addEventListener('mousedown', handleMouseDown);
+      readingArea.addEventListener('mouseup', handleMouseUp);
+      document.addEventListener('selectionchange', handleSelectionChange);
+      return () => {
+        readingArea.removeEventListener('mousedown', handleMouseDown);
+        readingArea.removeEventListener('mouseup', handleMouseUp);
+        document.removeEventListener('selectionchange', handleSelectionChange);
+        if (selectionTimeoutRef.current) {
+          clearTimeout(selectionTimeoutRef.current);
+        }
+      };
+    }
+  }, [lookupWord]);
+
   const goToNextPage = useCallback(() => {
     if (currentPage < totalPages - 1) {
       setCurrentPage(p => p + 1);
@@ -315,13 +531,20 @@ export function ChapterReader({ bookId, initialChapter, onBack }: ChapterReaderP
         case 'ArrowRight':
         case ' ':
           e.preventDefault();
+          closeDictionaryPopup();
           goToNextPage();
           break;
         case 'ArrowLeft':
           e.preventDefault();
+          closeDictionaryPopup();
           goToPrevPage();
           break;
         case 'Escape':
+          // Close dictionary popup first if open
+          if (dictionaryPopup) {
+            closeDictionaryPopup();
+            return;
+          }
           // If in fullscreen, browser handles ESC to exit fullscreen
           // Only call onBack if not in fullscreen
           if (!isFullscreenActive()) {
@@ -337,7 +560,7 @@ export function ChapterReader({ bookId, initialChapter, onBack }: ChapterReaderP
     };
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [goToNextPage, goToPrevPage, onBack, toggleFullscreen]);
+  }, [goToNextPage, goToPrevPage, onBack, toggleFullscreen, dictionaryPopup, closeDictionaryPopup]);
 
   if (loading && !chapter) {
     return (
@@ -456,8 +679,14 @@ export function ChapterReader({ bookId, initialChapter, onBack }: ChapterReaderP
         </div>
       </div>
 
-      {/* Reading area */}
-      <div className="flex-1 overflow-y-auto px-4 sm:px-8 lg:px-16 py-6">
+      {/* Reading area - hide native selection, bubble overlays handle highlight */}
+      <style>{`
+        .reading-content ::selection {
+          background-color: transparent;
+          color: inherit;
+        }
+      `}</style>
+      <div ref={readingAreaRef} className="reading-content flex-1 overflow-y-auto px-4 sm:px-8 lg:px-16 py-6 relative">
         {chapter && (
           <div className="max-w-2xl mx-auto">
             {/* Chapter title */}
@@ -574,6 +803,88 @@ export function ChapterReader({ bookId, initialChapter, onBack }: ChapterReaderP
             className="max-w-[90vw] max-h-[90vh] object-contain rounded-lg shadow-2xl"
             onClick={(e) => e.stopPropagation()}
           />
+        </div>
+      )}
+
+      {/* Selection bubble highlights */}
+      {selectionBubbles.map((bubble, index) => (
+        <div
+          key={index}
+          className={`fixed pointer-events-none z-40 rounded-lg transition-colors duration-150 ${
+            isSelecting
+              ? 'bg-cosmic-500/25 border border-cosmic-400/40 shadow-[0_0_8px_rgba(139,92,246,0.3)]'
+              : 'bg-ethereal-500/25 border border-ethereal-400/40 shadow-[0_0_8px_rgba(251,191,36,0.3)]'
+          }`}
+          style={{
+            left: bubble.x - 3,
+            top: bubble.y - 1,
+            width: bubble.width + 6,
+            height: bubble.height + 2,
+          }}
+        />
+      ))}
+
+      {/* Dictionary popup */}
+      {dictionaryPopup && (
+        <div
+          className="dictionary-popup fixed z-50 max-w-xs bg-surface border border-ethereal-400/30 rounded-lg shadow-xl shadow-ethereal-500/20 p-3 transform -translate-x-1/2 -translate-y-full"
+          style={{
+            left: Math.max(160, Math.min(dictionaryPopup.x, window.innerWidth - 160)),
+            top: Math.max(100, dictionaryPopup.y),
+          }}
+        >
+          {/* Arrow pointing down */}
+          <div className="absolute left-1/2 -bottom-2 -translate-x-1/2 w-0 h-0 border-l-8 border-r-8 border-t-8 border-l-transparent border-r-transparent border-t-ethereal-400/30" />
+
+          {/* Close button */}
+          <button
+            onClick={closeDictionaryPopup}
+            className="absolute top-1 right-1 p-1 text-text-muted hover:text-text-secondary transition-colors cursor-pointer"
+          >
+            <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+            </svg>
+          </button>
+
+          {dictionaryPopup.loading ? (
+            <div className="flex items-center gap-2 py-2">
+              <div className="w-4 h-4 border-2 border-cosmic-400 border-t-transparent rounded-full animate-spin" />
+              <span className="text-sm text-text-muted">Looking up "{dictionaryPopup.word}"...</span>
+            </div>
+          ) : dictionaryPopup.error ? (
+            <div className="py-1">
+              <p className="text-sm text-text-muted">{dictionaryPopup.error}</p>
+            </div>
+          ) : dictionaryPopup.entry ? (
+            <div className="pr-4">
+              {/* Word and phonetic */}
+              <div className="mb-2">
+                <span className="text-base font-semibold text-ethereal-300">{dictionaryPopup.entry.word}</span>
+                {dictionaryPopup.entry.phonetic && (
+                  <span className="ml-2 text-sm text-text-muted">{dictionaryPopup.entry.phonetic}</span>
+                )}
+              </div>
+
+              {/* Meanings */}
+              <div className="space-y-2 max-h-48 overflow-y-auto">
+                {dictionaryPopup.entry.meanings.map((meaning, idx) => (
+                  <div key={idx}>
+                    <span className="text-xs font-medium text-cosmic-300 italic">{meaning.partOfSpeech}</span>
+                    <ol className="mt-1 space-y-1 pl-4 list-decimal list-outside">
+                      {meaning.definitions.slice(0, 2).map((def, defIdx) => (
+                        <li key={defIdx} className="text-sm text-text-secondary">
+                          {def.definition}
+                          {def.example && (
+                            <p className="text-xs text-text-muted mt-0.5 italic">"{def.example}"</p>
+                          )}
+                        </li>
+                      ))}
+                    </ol>
+                  </div>
+                ))}
+              </div>
+            </div>
+          ) : null}
         </div>
       )}
     </div>

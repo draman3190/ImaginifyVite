@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import { useBooks } from '../hooks/useBooks';
 import { DeleteConfirmModal } from './DeleteConfirmModal';
 
@@ -16,10 +16,113 @@ export function LibraryPage({ refreshTrigger, onRefreshNeeded }: LibraryPageProp
       refresh();
     }
   }, [refreshTrigger, refresh]);
+
+  // Search and filter state
+  const [searchQuery, setSearchQuery] = useState('');
+  const [statusFilter, setStatusFilter] = useState<string>('all');
+  const [imageStatusFilter, setImageStatusFilter] = useState<string>('all');
+  const [genreFilter, setGenreFilter] = useState<string>('all');
+
+  // Pagination state
+  const [pageSize, setPageSize] = useState<number>(10);
+  const [currentPage, setCurrentPage] = useState<number>(1);
+
+  // Get unique genres from all books
+  const allGenres = useMemo(() => {
+    const genres = new Set<string>();
+    books.forEach((book) => {
+      book.genre?.forEach((g) => genres.add(g));
+    });
+    return Array.from(genres).sort();
+  }, [books]);
+
+  // Filter books based on search and filters
+  const filteredBooks = useMemo(() => {
+    return books.filter((book) => {
+      // Search filter
+      if (searchQuery) {
+        const query = searchQuery.toLowerCase();
+        const titleMatch = book.title?.toLowerCase().includes(query);
+        const authorMatch = book.authors?.some((a) => a.toLowerCase().includes(query));
+        if (!titleMatch && !authorMatch) return false;
+      }
+
+      // Status filter
+      if (statusFilter !== 'all' && book.processingStatus !== statusFilter) {
+        return false;
+      }
+
+      // Image status filter
+      if (imageStatusFilter !== 'all') {
+        if (imageStatusFilter === 'NOT_STARTED' && book.imageStatus && book.imageStatus !== 'NOT_STARTED') {
+          return false;
+        } else if (imageStatusFilter !== 'NOT_STARTED' && book.imageStatus !== imageStatusFilter) {
+          return false;
+        }
+      }
+
+      // Genre filter
+      if (genreFilter !== 'all') {
+        if (!book.genre?.includes(genreFilter)) return false;
+      }
+
+      return true;
+    });
+  }, [books, searchQuery, statusFilter, imageStatusFilter, genreFilter]);
+
+  // Reset to page 1 when filters change
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [searchQuery, statusFilter, imageStatusFilter, genreFilter, pageSize]);
+
+  // Calculate pagination
+  const totalPages = Math.ceil(filteredBooks.length / pageSize);
+  const startIndex = (currentPage - 1) * pageSize;
+  const displayedBooks = filteredBooks.slice(startIndex, startIndex + pageSize);
+
   const [deleteTarget, setDeleteTarget] = useState<{ id: string; title: string } | null>(null);
   const [isDeleting, setIsDeleting] = useState(false);
   const [isDeleted, setIsDeleted] = useState(false);
   const [openMenuId, setOpenMenuId] = useState<string | null>(null);
+
+  // Dropdown open states for filters
+  const [openDropdown, setOpenDropdown] = useState<string | null>(null);
+
+  const clearFilters = () => {
+    setSearchQuery('');
+    setStatusFilter('all');
+    setImageStatusFilter('all');
+    setGenreFilter('all');
+  };
+
+  const clearDropdownFilters = () => {
+    setStatusFilter('all');
+    setImageStatusFilter('all');
+    setGenreFilter('all');
+  };
+
+  const getStatusLabel = (status: string) => {
+    switch (status) {
+      case 'COMPLETED': return 'Ready';
+      case 'PROCESSING': return 'Analyzing';
+      case 'PENDING_UPLOAD': return 'Queued';
+      case 'FAILED': return 'Failed';
+      default: return status;
+    }
+  };
+
+  const getImageStatusLabel = (status: string) => {
+    switch (status) {
+      case 'COMPLETED': return 'Done';
+      case 'GENERATING': return 'Generating';
+      case 'NOT_STARTED': return 'Pending';
+      case 'FAILED': return 'Failed';
+      default: return status;
+    }
+  };
+
+  const hasActiveFilters = searchQuery || statusFilter !== 'all' || imageStatusFilter !== 'all' || genreFilter !== 'all';
+  const hasActiveDropdownFilters = statusFilter !== 'all' || imageStatusFilter !== 'all' || genreFilter !== 'all';
 
   const handleDeleteClick = (bookId: string, title: string) => {
     setOpenMenuId(null);
@@ -104,6 +207,284 @@ export function LibraryPage({ refreshTrigger, onRefreshNeeded }: LibraryPageProp
           <p className="text-sm text-text-muted">{books.length} book{books.length !== 1 ? 's' : ''} in your collection</p>
         </div>
 
+        {/* Search and Filters */}
+        <div className="mb-6">
+          <div className="flex flex-wrap items-center gap-4">
+            {/* Search bar */}
+            <div className="relative w-72">
+              <svg
+                className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-text-muted"
+                fill="none"
+                stroke="currentColor"
+                viewBox="0 0 24 24"
+              >
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+              </svg>
+              <input
+                type="text"
+                placeholder="Search by title or author..."
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                className={`w-full pl-10 pr-8 py-1.5 bg-surface border rounded text-sm placeholder-text-muted focus:outline-none transition-all ${
+                  searchQuery
+                    ? 'border-ethereal-400/50 shadow-[0_0_15px_rgba(251,191,36,0.3)] text-ethereal-300'
+                    : 'border-white/10 text-text-primary focus:border-cosmic-400/50 focus:shadow-[0_0_10px_rgba(139,92,246,0.15)]'
+                }`}
+              />
+              {searchQuery && (
+                <button
+                  onClick={() => setSearchQuery('')}
+                  className="absolute right-3 top-1/2 -translate-y-1/2 text-text-muted hover:text-text-secondary transition-colors cursor-pointer"
+                >
+                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                  </svg>
+                </button>
+              )}
+            </div>
+
+            {/* Divider */}
+            <div className="h-6 w-px bg-white/10" />
+
+            {/* Filters label */}
+            <span className={`text-sm font-medium transition-all ${
+              openDropdown
+                ? 'text-cosmic-300 drop-shadow-[0_0_8px_rgba(139,92,246,0.6)]'
+                : hasActiveDropdownFilters
+                ? 'text-ethereal-300 drop-shadow-[0_0_8px_rgba(251,191,36,0.6)]'
+                : 'text-text-secondary'
+            }`}>Filters</span>
+
+            {/* Status filter dropdown */}
+            <div className="relative">
+              <button
+                onClick={() => setOpenDropdown(openDropdown === 'status' ? null : 'status')}
+                className={`flex items-center gap-2 text-sm text-text-secondary hover:text-cosmic-300 transition-all px-3 py-1 rounded border cursor-pointer ${
+                  openDropdown === 'status'
+                    ? 'border-ethereal-400/50 shadow-[0_0_15px_rgba(251,191,36,0.3)]'
+                    : statusFilter !== 'all'
+                    ? 'border-ethereal-400/50 text-ethereal-300 font-medium shadow-[0_0_15px_rgba(251,191,36,0.3)]'
+                    : 'border-white/10 hover:border-cosmic-400/30 hover:shadow-[0_0_10px_rgba(139,92,246,0.15)]'
+                }`}
+              >
+                <span>{statusFilter === 'all' ? 'Availability' : getStatusLabel(statusFilter)}</span>
+                <svg className={`w-3 h-3 transition-transform ${openDropdown === 'status' ? 'rotate-180' : ''}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+                </svg>
+              </button>
+              {openDropdown === 'status' && (
+                <div className="absolute top-full left-0 mt-1 w-40 bg-surface border border-ethereal-400/30 rounded-lg shadow-xl shadow-ethereal-500/20 z-50 py-1 max-h-64 overflow-y-auto">
+                  {[
+                    { value: 'all', label: 'All' },
+                    { value: 'COMPLETED', label: 'Ready' },
+                    { value: 'PROCESSING', label: 'Analyzing' },
+                    { value: 'PENDING_UPLOAD', label: 'Queued' },
+                    { value: 'FAILED', label: 'Failed' },
+                  ].map((option) => (
+                    <button
+                      key={option.value}
+                      onClick={() => {
+                        setStatusFilter(option.value);
+                        setOpenDropdown(null);
+                      }}
+                      className={`w-full text-left px-3 py-1.5 text-sm transition-colors cursor-pointer ${
+                        statusFilter === option.value
+                          ? 'text-ethereal-300 font-medium bg-ethereal-500/10'
+                          : 'text-text-secondary hover:text-cosmic-300 hover:bg-cosmic-500/10'
+                      }`}
+                    >
+                      {option.label}
+                    </button>
+                  ))}
+                </div>
+              )}
+            </div>
+
+            {/* Image status filter dropdown */}
+            <div className="relative">
+              <button
+                onClick={() => setOpenDropdown(openDropdown === 'imageStatus' ? null : 'imageStatus')}
+                className={`flex items-center gap-2 text-sm text-text-secondary hover:text-cosmic-300 transition-all px-3 py-1 rounded border cursor-pointer ${
+                  openDropdown === 'imageStatus'
+                    ? 'border-ethereal-400/50 shadow-[0_0_15px_rgba(251,191,36,0.3)]'
+                    : imageStatusFilter !== 'all'
+                    ? 'border-ethereal-400/50 text-ethereal-300 font-medium shadow-[0_0_15px_rgba(251,191,36,0.3)]'
+                    : 'border-white/10 hover:border-cosmic-400/30 hover:shadow-[0_0_10px_rgba(139,92,246,0.15)]'
+                }`}
+              >
+                <span>{imageStatusFilter === 'all' ? 'Illustrations' : getImageStatusLabel(imageStatusFilter)}</span>
+                <svg className={`w-3 h-3 transition-transform ${openDropdown === 'imageStatus' ? 'rotate-180' : ''}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+                </svg>
+              </button>
+              {openDropdown === 'imageStatus' && (
+                <div className="absolute top-full left-0 mt-1 w-40 bg-surface border border-ethereal-400/30 rounded-lg shadow-xl shadow-ethereal-500/20 z-50 py-1 max-h-64 overflow-y-auto">
+                  {[
+                    { value: 'all', label: 'All' },
+                    { value: 'COMPLETED', label: 'Done' },
+                    { value: 'GENERATING', label: 'Generating' },
+                    { value: 'NOT_STARTED', label: 'Pending' },
+                    { value: 'FAILED', label: 'Failed' },
+                  ].map((option) => (
+                    <button
+                      key={option.value}
+                      onClick={() => {
+                        setImageStatusFilter(option.value);
+                        setOpenDropdown(null);
+                      }}
+                      className={`w-full text-left px-3 py-1.5 text-sm transition-colors cursor-pointer ${
+                        imageStatusFilter === option.value
+                          ? 'text-ethereal-300 font-medium bg-ethereal-500/10'
+                          : 'text-text-secondary hover:text-cosmic-300 hover:bg-cosmic-500/10'
+                      }`}
+                    >
+                      {option.label}
+                    </button>
+                  ))}
+                </div>
+              )}
+            </div>
+
+            {/* Genre filter dropdown */}
+            {allGenres.length > 0 && (
+              <div className="relative">
+                <button
+                  onClick={() => setOpenDropdown(openDropdown === 'genre' ? null : 'genre')}
+                  className={`flex items-center gap-2 text-sm text-text-secondary hover:text-cosmic-300 transition-all px-3 py-1 rounded border cursor-pointer ${
+                    openDropdown === 'genre'
+                      ? 'border-ethereal-400/50 shadow-[0_0_15px_rgba(251,191,36,0.3)]'
+                      : genreFilter !== 'all'
+                      ? 'border-ethereal-400/50 text-ethereal-300 font-medium shadow-[0_0_15px_rgba(251,191,36,0.3)]'
+                      : 'border-white/10 hover:border-cosmic-400/30 hover:shadow-[0_0_10px_rgba(139,92,246,0.15)]'
+                  }`}
+                >
+                  <span>{genreFilter === 'all' ? 'Genre' : genreFilter}</span>
+                  <svg className={`w-3 h-3 transition-transform ${openDropdown === 'genre' ? 'rotate-180' : ''}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+                  </svg>
+                </button>
+                {openDropdown === 'genre' && (
+                  <div className="absolute top-full left-0 mt-1 w-40 bg-surface border border-ethereal-400/30 rounded-lg shadow-xl shadow-ethereal-500/20 z-50 py-1 max-h-64 overflow-y-auto">
+                    <button
+                      onClick={() => {
+                        setGenreFilter('all');
+                        setOpenDropdown(null);
+                      }}
+                      className={`w-full text-left px-3 py-1.5 text-sm transition-colors cursor-pointer ${
+                        genreFilter === 'all'
+                          ? 'text-ethereal-300 font-medium bg-ethereal-500/10'
+                          : 'text-text-secondary hover:text-cosmic-300 hover:bg-cosmic-500/10'
+                      }`}
+                    >
+                      All
+                    </button>
+                    {allGenres.map((genre) => (
+                      <button
+                        key={genre}
+                        onClick={() => {
+                          setGenreFilter(genre);
+                          setOpenDropdown(null);
+                        }}
+                        className={`w-full text-left px-3 py-1.5 text-sm transition-colors cursor-pointer ${
+                          genreFilter === genre
+                            ? 'text-ethereal-300 font-medium bg-ethereal-500/10'
+                            : 'text-text-secondary hover:text-cosmic-300 hover:bg-cosmic-500/10'
+                        }`}
+                      >
+                        {genre}
+                      </button>
+                    ))}
+                  </div>
+                )}
+              </div>
+            )}
+
+            {/* Clear filters */}
+            {hasActiveDropdownFilters && (
+              <button
+                onClick={clearDropdownFilters}
+                className="px-3 py-1 text-xs text-cosmic-300 hover:text-cosmic-200 border border-cosmic-400/30 rounded hover:bg-cosmic-500/10 hover:shadow-[0_0_10px_rgba(139,92,246,0.15)] transition-all cursor-pointer"
+              >
+                Clear
+              </button>
+            )}
+
+            {/* Results count */}
+            {hasActiveFilters && (
+              <span className="text-xs text-text-muted">
+                {filteredBooks.length} of {books.length} match
+              </span>
+            )}
+
+            {/* Page size selector */}
+            <div className="flex items-center gap-2 ml-auto">
+              <span className="text-xs text-text-muted">Show</span>
+              <div className="relative">
+                <button
+                  onClick={() => setOpenDropdown(openDropdown === 'pageSize' ? null : 'pageSize')}
+                  className={`flex items-center gap-2 text-sm text-text-secondary hover:text-cosmic-300 transition-all px-2 py-0.5 rounded border cursor-pointer ${
+                    openDropdown === 'pageSize'
+                      ? 'border-ethereal-400/50 shadow-[0_0_15px_rgba(251,191,36,0.3)]'
+                      : 'border-white/10 hover:border-cosmic-400/30 hover:shadow-[0_0_10px_rgba(139,92,246,0.15)]'
+                  }`}
+                >
+                  <span>{pageSize}</span>
+                  <svg className={`w-3 h-3 transition-transform ${openDropdown === 'pageSize' ? 'rotate-180' : ''}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+                  </svg>
+                </button>
+                {openDropdown === 'pageSize' && (
+                  <div className="absolute top-full right-0 mt-1 w-20 bg-surface border border-ethereal-400/30 rounded-lg shadow-xl shadow-ethereal-500/20 z-50 py-1">
+                    {[10, 50, 100].map((size) => (
+                      <button
+                        key={size}
+                        onClick={() => {
+                          setPageSize(size);
+                          setOpenDropdown(null);
+                        }}
+                        className={`w-full text-left px-3 py-1.5 text-sm transition-colors cursor-pointer ${
+                          pageSize === size
+                            ? 'text-ethereal-300 font-medium bg-ethereal-500/10'
+                            : 'text-text-secondary hover:text-cosmic-300 hover:bg-cosmic-500/10'
+                        }`}
+                      >
+                        {size}
+                      </button>
+                    ))}
+                  </div>
+                )}
+              </div>
+              <span className="text-xs text-text-muted">per page</span>
+            </div>
+          </div>
+        </div>
+
+        {/* Click outside to close dropdown */}
+        {openDropdown && (
+          <div
+            className="fixed inset-0 z-40"
+            onClick={() => setOpenDropdown(null)}
+          />
+        )}
+
+        {/* No results message */}
+        {filteredBooks.length === 0 && hasActiveFilters && (
+          <div className="flex flex-col items-center justify-center py-12 text-center">
+            <svg className="w-12 h-12 text-text-muted mb-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+            </svg>
+            <h3 className="text-lg font-medium text-text-primary mb-2">No books found</h3>
+            <p className="text-sm text-text-muted mb-4">Try adjusting your search or filters</p>
+            <button
+              onClick={clearFilters}
+              className="px-4 py-2 text-sm text-cosmic-300 border border-cosmic-400/30 rounded-lg hover:bg-cosmic-500/10 transition-all cursor-pointer"
+            >
+              Clear all filters
+            </button>
+          </div>
+        )}
+
+        {filteredBooks.length > 0 && (
         <div className="rounded-lg border border-border-subtle">
           <table className="w-full">
             <thead className="bg-raised/50">
@@ -135,7 +516,7 @@ export function LibraryPage({ refreshTrigger, onRefreshNeeded }: LibraryPageProp
               </tr>
             </thead>
             <tbody className="divide-y divide-border-subtle">
-              {books.map((book) => (
+              {displayedBooks.map((book) => (
                 <tr key={book.bookId} className="hover:bg-raised/30 transition-colors">
                   <td className="px-4 py-4">
                     <span className="font-medium text-text-primary">{book.title}</span>
@@ -183,7 +564,10 @@ export function LibraryPage({ refreshTrigger, onRefreshNeeded }: LibraryPageProp
                   <td className="px-4 py-4 text-center">
                     <div className="relative inline-block">
                       <button
-                        onClick={() => setOpenMenuId(openMenuId === book.bookId ? null : book.bookId)}
+                        onClick={() => {
+                          setOpenDropdown(null);
+                          setOpenMenuId(openMenuId === book.bookId ? null : book.bookId);
+                        }}
                         className={`p-1.5 rounded transition-all cursor-pointer ${
                           openMenuId === book.bookId
                             ? 'text-ethereal-300 shadow-[0_0_15px_rgba(251,191,36,0.3)]'
@@ -210,7 +594,66 @@ export function LibraryPage({ refreshTrigger, onRefreshNeeded }: LibraryPageProp
               ))}
             </tbody>
           </table>
+
+          {/* Pagination controls */}
+          {totalPages > 1 && (
+            <div className="flex items-center justify-between px-4 py-3 border-t border-border-subtle bg-raised/30">
+              <span className="text-xs text-text-muted">
+                Showing {startIndex + 1}–{Math.min(startIndex + pageSize, filteredBooks.length)} of {filteredBooks.length}
+              </span>
+              <div className="flex items-center gap-2">
+                <button
+                  onClick={() => setCurrentPage(1)}
+                  disabled={currentPage === 1}
+                  className={`px-2 py-1 text-xs rounded border transition-all cursor-pointer ${
+                    currentPage === 1
+                      ? 'border-white/5 text-text-muted cursor-not-allowed'
+                      : 'border-white/10 text-text-secondary hover:text-cosmic-300 hover:border-cosmic-400/30 hover:shadow-[0_0_10px_rgba(139,92,246,0.15)]'
+                  }`}
+                >
+                  First
+                </button>
+                <button
+                  onClick={() => setCurrentPage(currentPage - 1)}
+                  disabled={currentPage === 1}
+                  className={`px-2 py-1 text-xs rounded border transition-all cursor-pointer ${
+                    currentPage === 1
+                      ? 'border-white/5 text-text-muted cursor-not-allowed'
+                      : 'border-white/10 text-text-secondary hover:text-cosmic-300 hover:border-cosmic-400/30 hover:shadow-[0_0_10px_rgba(139,92,246,0.15)]'
+                  }`}
+                >
+                  Prev
+                </button>
+                <span className="px-3 py-1 text-sm text-text-secondary">
+                  Page <span className="text-ethereal-300 font-medium">{currentPage}</span> of {totalPages}
+                </span>
+                <button
+                  onClick={() => setCurrentPage(currentPage + 1)}
+                  disabled={currentPage === totalPages}
+                  className={`px-2 py-1 text-xs rounded border transition-all cursor-pointer ${
+                    currentPage === totalPages
+                      ? 'border-white/5 text-text-muted cursor-not-allowed'
+                      : 'border-white/10 text-text-secondary hover:text-cosmic-300 hover:border-cosmic-400/30 hover:shadow-[0_0_10px_rgba(139,92,246,0.15)]'
+                  }`}
+                >
+                  Next
+                </button>
+                <button
+                  onClick={() => setCurrentPage(totalPages)}
+                  disabled={currentPage === totalPages}
+                  className={`px-2 py-1 text-xs rounded border transition-all cursor-pointer ${
+                    currentPage === totalPages
+                      ? 'border-white/5 text-text-muted cursor-not-allowed'
+                      : 'border-white/10 text-text-secondary hover:text-cosmic-300 hover:border-cosmic-400/30 hover:shadow-[0_0_10px_rgba(139,92,246,0.15)]'
+                  }`}
+                >
+                  Last
+                </button>
+              </div>
+            </div>
+          )}
         </div>
+        )}
 
         {/* Click outside to close menu */}
         {openMenuId && (
