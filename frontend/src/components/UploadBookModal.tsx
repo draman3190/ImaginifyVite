@@ -74,7 +74,7 @@ export function UploadBookModal({ onClose, onUploadComplete }: UploadBookModalPr
             <div className="flex justify-end gap-3">
               <button
                 onClick={onClose}
-                className="cursor-pointer rounded-lg px-4 py-2 text-sm font-medium text-text-secondary hover:bg-raised/50 transition-colors"
+                className="cursor-pointer rounded-lg px-4 py-2 text-sm font-medium text-text-secondary border border-transparent hover:text-cosmic-300 hover:border-cosmic-400/30 hover:shadow-[0_0_10px_rgba(139,92,246,0.15)] transition-all"
               >
                 Cancel
               </button>
@@ -117,7 +117,7 @@ export function UploadBookModal({ onClose, onUploadComplete }: UploadBookModalPr
             <div className="flex gap-3">
               <button
                 onClick={onClose}
-                className="cursor-pointer rounded-lg px-4 py-2 text-sm font-medium text-text-secondary hover:bg-raised/50 transition-colors"
+                className="cursor-pointer rounded-lg px-4 py-2 text-sm font-medium text-text-secondary border border-transparent hover:text-cosmic-300 hover:border-cosmic-400/30 hover:shadow-[0_0_10px_rgba(139,92,246,0.15)] transition-all"
               >
                 Cancel
               </button>
