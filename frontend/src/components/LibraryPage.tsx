@@ -691,34 +691,116 @@ export function LibraryPage({ refreshTrigger, onRefreshNeeded }: LibraryPageProp
 
         {/* Bookshelf View */}
         {filteredBooks.length > 0 && viewMode === 'shelf' && (
-          <div className="space-y-8">
-            {/* Render books in shelf rows */}
-            {Array.from({ length: Math.ceil(displayedBooks.length / 6) }).map((_, shelfIndex) => {
-              const shelfBooks = displayedBooks.slice(shelfIndex * 6, (shelfIndex + 1) * 6);
-              return (
-                <div key={shelfIndex} className="relative">
-                  {/* Shelf with books */}
-                  <div className="flex items-end gap-3 px-4 pb-3 min-h-[200px]">
-                    {shelfBooks.map((book) => (
-                      <BookSpine
-                        key={book.bookId}
-                        book={book}
-                        isMenuOpen={openMenuId === book.bookId}
-                        onMenuToggle={() => {
-                          setOpenDropdown(null);
-                          setOpenMenuId(openMenuId === book.bookId ? null : book.bookId);
+          <div className="space-y-4">
+            {/* Bookshelf cabinet */}
+            <div className="relative rounded-lg overflow-hidden" style={{
+              background: 'linear-gradient(180deg, #2A1810 0%, #1F120C 100%)',
+              boxShadow: 'inset 0 2px 4px rgba(0,0,0,0.3), 0 4px 20px rgba(0,0,0,0.4)',
+            }}>
+              {/* Wood grain texture overlay */}
+              <div className="absolute inset-0 opacity-20"
+                style={{
+                  backgroundImage: `url("data:image/svg+xml,%3Csvg viewBox='0 0 200 200' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='wood'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.02 0.15' numOctaves='3' seed='1'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23wood)'/%3E%3C/svg%3E")`,
+                }}
+              />
+
+              {/* Render shelves with books */}
+              {Array.from({ length: Math.ceil(displayedBooks.length / 5) }).map((_, shelfIndex) => {
+                const shelfBooks = displayedBooks.slice(shelfIndex * 5, (shelfIndex + 1) * 5);
+                return (
+                  <div key={shelfIndex} className="relative">
+                    {/* Shelf back panel */}
+                    <div className="absolute inset-x-0 top-0 bottom-4"
+                      style={{
+                        background: 'linear-gradient(180deg, #1A0F0A 0%, #241610 50%, #1A0F0A 100%)',
+                      }}
+                    />
+
+                    {/* Books container */}
+                    <div className="relative flex items-end gap-1 px-6 pt-4 pb-0 min-h-[220px]">
+                      {/* Left bookend */}
+                      {shelfIndex === 0 && shelfBooks.length > 0 && (
+                        <div className="flex-shrink-0 w-4 h-[160px] mr-2"
+                          style={{
+                            background: 'linear-gradient(to right, #4A3728, #3D2D22, #2D211A)',
+                            borderRadius: '2px',
+                            boxShadow: '2px 0 4px rgba(0,0,0,0.3)',
+                          }}
+                        />
+                      )}
+
+                      {shelfBooks.map((book) => (
+                        <BookSpine
+                          key={book.bookId}
+                          book={book}
+                          isMenuOpen={openMenuId === book.bookId}
+                          onMenuToggle={() => {
+                            setOpenDropdown(null);
+                            setOpenMenuId(openMenuId === book.bookId ? null : book.bookId);
+                          }}
+                          onDelete={() => handleDeleteClick(book.bookId, book.title)}
+                        />
+                      ))}
+
+                      {/* Right bookend */}
+                      {shelfBooks.length > 0 && (
+                        <div className="flex-shrink-0 w-4 h-[160px] ml-2"
+                          style={{
+                            background: 'linear-gradient(to left, #4A3728, #3D2D22, #2D211A)',
+                            borderRadius: '2px',
+                            boxShadow: '-2px 0 4px rgba(0,0,0,0.3)',
+                          }}
+                        />
+                      )}
+                    </div>
+
+                    {/* Shelf board - 3D wooden plank */}
+                    <div className="relative h-5 mx-2"
+                      style={{
+                        background: 'linear-gradient(180deg, #5D4037 0%, #4E342E 40%, #3E2723 100%)',
+                        borderRadius: '0 0 3px 3px',
+                        boxShadow: '0 4px 8px rgba(0,0,0,0.4), inset 0 2px 0 rgba(255,255,255,0.05)',
+                      }}
+                    >
+                      {/* Wood grain on shelf */}
+                      <div className="absolute inset-0 opacity-30"
+                        style={{
+                          backgroundImage: `repeating-linear-gradient(
+                            90deg,
+                            transparent,
+                            transparent 20px,
+                            rgba(0,0,0,0.1) 20px,
+                            rgba(0,0,0,0.1) 21px
+                          )`,
                         }}
-                        onDelete={() => handleDeleteClick(book.bookId, book.title)}
                       />
-                    ))}
+                      {/* Shelf front lip highlight */}
+                      <div className="absolute bottom-0 left-0 right-0 h-[3px]"
+                        style={{
+                          background: 'linear-gradient(180deg, #6D4C41, #5D4037)',
+                          borderRadius: '0 0 3px 3px',
+                        }}
+                      />
+                    </div>
+
+                    {/* Shadow under shelf */}
+                    <div className="h-3 mx-4"
+                      style={{
+                        background: 'linear-gradient(180deg, rgba(0,0,0,0.4) 0%, transparent 100%)',
+                      }}
+                    />
                   </div>
-                  {/* Shelf board */}
-                  <div className="h-3 bg-gradient-to-b from-amber-900/40 to-amber-950/60 rounded-sm shadow-[0_4px_8px_rgba(0,0,0,0.3),inset_0_1px_0_rgba(255,255,255,0.1)]" />
-                  {/* Shelf bracket shadows */}
-                  <div className="absolute -bottom-1 left-4 right-4 h-2 bg-gradient-to-b from-black/20 to-transparent" />
-                </div>
-              );
-            })}
+                );
+              })}
+
+              {/* Cabinet bottom trim */}
+              <div className="h-3 mx-2 -mt-2"
+                style={{
+                  background: 'linear-gradient(180deg, #3E2723, #2D1F1A)',
+                  borderRadius: '0 0 4px 4px',
+                }}
+              />
+            </div>
 
             {/* Pagination controls for shelf view */}
             {totalPages > 1 && (
@@ -894,35 +976,49 @@ function ImageStatusCell({ imageStatus, isBookReady }: ImageStatusCellProps) {
   );
 }
 
-// Book spine colors based on genre or hash of title
-const SPINE_COLORS = [
-  { bg: 'from-rose-900 to-rose-950', text: 'text-rose-100', accent: 'bg-rose-700' },
-  { bg: 'from-blue-900 to-blue-950', text: 'text-blue-100', accent: 'bg-blue-700' },
-  { bg: 'from-emerald-900 to-emerald-950', text: 'text-emerald-100', accent: 'bg-emerald-700' },
-  { bg: 'from-amber-900 to-amber-950', text: 'text-amber-100', accent: 'bg-amber-700' },
-  { bg: 'from-purple-900 to-purple-950', text: 'text-purple-100', accent: 'bg-purple-700' },
-  { bg: 'from-cyan-900 to-cyan-950', text: 'text-cyan-100', accent: 'bg-cyan-700' },
-  { bg: 'from-pink-900 to-pink-950', text: 'text-pink-100', accent: 'bg-pink-700' },
-  { bg: 'from-indigo-900 to-indigo-950', text: 'text-indigo-100', accent: 'bg-indigo-700' },
+// Realistic book spine colors - leather, cloth, and modern covers
+const SPINE_STYLES = [
+  { bg: '#8B2635', texture: 'leather', text: '#F5E6D3', accent: '#C9A962' }, // Burgundy leather with gold
+  { bg: '#1E3A5F', texture: 'cloth', text: '#E8E8E8', accent: '#C0C0C0' },   // Navy cloth with silver
+  { bg: '#2D4A3E', texture: 'leather', text: '#F5E6D3', accent: '#C9A962' }, // Forest green leather
+  { bg: '#4A3728', texture: 'leather', text: '#F5E6D3', accent: '#C9A962' }, // Brown leather
+  { bg: '#483D8B', texture: 'cloth', text: '#E8E8E8', accent: '#DDA0DD' },   // Purple cloth
+  { bg: '#8B4513', texture: 'leather', text: '#F5E6D3', accent: '#C9A962' }, // Saddle brown
+  { bg: '#191970', texture: 'cloth', text: '#E8E8E8', accent: '#87CEEB' },   // Midnight blue
+  { bg: '#800020', texture: 'leather', text: '#F5E6D3', accent: '#C9A962' }, // Burgundy
+  { bg: '#2F4F4F', texture: 'cloth', text: '#E8E8E8', accent: '#98FB98' },   // Dark slate
+  { bg: '#722F37', texture: 'leather', text: '#F5E6D3', accent: '#C9A962' }, // Wine
 ];
 
-function getSpineColor(book: BookSummary) {
-  // Use genre to determine color if available, otherwise hash the title
-  if (book.genre && book.genre.length > 0) {
-    const genreHash = book.genre[0].split('').reduce((acc, char) => acc + char.charCodeAt(0), 0);
-    return SPINE_COLORS[genreHash % SPINE_COLORS.length];
-  }
-  const titleHash = book.title.split('').reduce((acc, char) => acc + char.charCodeAt(0), 0);
-  return SPINE_COLORS[titleHash % SPINE_COLORS.length];
+function getSpineStyle(book: BookSummary) {
+  const hash = book.title.split('').reduce((acc, char, i) => acc + char.charCodeAt(0) * (i + 1), 0);
+  return SPINE_STYLES[hash % SPINE_STYLES.length];
 }
 
-function getSpineHeight(book: BookSummary) {
-  // Vary height based on page count or chapters
-  const baseHeight = 140;
-  const variance = book.totalChapters > 0
-    ? Math.min(book.totalChapters * 2, 40)
-    : Math.min((book.title.length % 20) * 2, 40);
-  return baseHeight + variance;
+function getSpineDimensions(book: BookSummary) {
+  // Height based on chapters/content (taller = more content)
+  const baseHeight = 180;
+  const heightVariance = book.totalChapters > 0
+    ? Math.min(book.totalChapters * 1.5, 30)
+    : (book.title.length % 15) * 2;
+
+  // Width based on page count or chapters (wider = more pages)
+  const baseWidth = 32;
+  const widthVariance = book.totalChapters > 0
+    ? Math.min(book.totalChapters * 0.8, 20)
+    : (book.title.length % 10) * 1.5;
+
+  return {
+    height: baseHeight + heightVariance,
+    width: baseWidth + widthVariance,
+  };
+}
+
+function getRandomTilt(bookId: string) {
+  // Consistent "random" tilt based on book ID
+  const hash = bookId.split('').reduce((acc, char) => acc + char.charCodeAt(0), 0);
+  const tiltOptions = [-2, -1, 0, 0, 0, 1, 2]; // Most books straight, some tilted
+  return tiltOptions[hash % tiltOptions.length];
 }
 
 interface BookSpineProps {
@@ -933,75 +1029,190 @@ interface BookSpineProps {
 }
 
 function BookSpine({ book, isMenuOpen, onMenuToggle, onDelete }: BookSpineProps) {
-  const color = getSpineColor(book);
-  const height = getSpineHeight(book);
+  const style = getSpineStyle(book);
+  const { height, width } = getSpineDimensions(book);
+  const tilt = getRandomTilt(book.bookId);
   const isReady = book.processingStatus === 'COMPLETED';
+  const authorName = book.authors?.[0] || 'Unknown';
 
   return (
-    <div className="relative group">
-      {/* Book spine */}
+    <div
+      className="relative group"
+      style={{ transform: `rotate(${tilt}deg)`, transformOrigin: 'bottom center' }}
+    >
+      {/* Book shadow on shelf */}
       <div
-        className={`relative w-12 rounded-sm cursor-pointer transition-all duration-300 group-hover:-translate-y-2 group-hover:shadow-[0_8px_20px_rgba(0,0,0,0.4)] ${
-          !isReady ? 'opacity-60' : ''
+        className="absolute -bottom-1 left-1/2 -translate-x-1/2 bg-black/40 blur-sm rounded-full"
+        style={{ width: width + 4, height: 6 }}
+      />
+
+      {/* Book spine container */}
+      <div
+        className={`relative cursor-pointer transition-all duration-300 group-hover:-translate-y-3 group-hover:rotate-0 ${
+          !isReady ? 'opacity-70' : ''
         }`}
-        style={{ height: `${height}px` }}
+        style={{ height, width }}
         onClick={onMenuToggle}
       >
-        {/* Spine background with 3D effect */}
-        <div className={`absolute inset-0 bg-gradient-to-r ${color.bg} rounded-sm`} />
+        {/* Main spine body */}
+        <div
+          className="absolute inset-0 rounded-[2px]"
+          style={{
+            background: `linear-gradient(to right,
+              ${style.bg} 0%,
+              ${adjustBrightness(style.bg, 20)} 15%,
+              ${adjustBrightness(style.bg, 10)} 50%,
+              ${adjustBrightness(style.bg, -10)} 85%,
+              ${adjustBrightness(style.bg, -20)} 100%
+            )`,
+          }}
+        />
 
-        {/* Left edge highlight */}
-        <div className="absolute left-0 top-0 bottom-0 w-1 bg-white/10 rounded-l-sm" />
+        {/* Leather/cloth texture overlay */}
+        <div
+          className="absolute inset-0 rounded-[2px] opacity-30"
+          style={{
+            backgroundImage: style.texture === 'leather'
+              ? `url("data:image/svg+xml,%3Csvg viewBox='0 0 100 100' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noise'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23noise)'/%3E%3C/svg%3E")`
+              : `url("data:image/svg+xml,%3Csvg viewBox='0 0 100 100' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noise'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='1.5' numOctaves='3' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23noise)'/%3E%3C/svg%3E")`,
+          }}
+        />
 
-        {/* Right edge shadow */}
-        <div className="absolute right-0 top-0 bottom-0 w-1 bg-black/30 rounded-r-sm" />
+        {/* Top edge (pages) */}
+        <div
+          className="absolute -top-[3px] left-[2px] right-[2px] h-[3px] rounded-t-[1px]"
+          style={{
+            background: 'linear-gradient(to bottom, #F5F5DC, #E8E4D9)',
+            boxShadow: 'inset 0 1px 0 rgba(255,255,255,0.3)',
+          }}
+        />
 
-        {/* Top edge */}
-        <div className="absolute top-0 left-0 right-0 h-1 bg-white/5 rounded-t-sm" />
+        {/* Spine raised edges */}
+        <div className="absolute left-0 top-0 bottom-0 w-[2px] rounded-l-[2px]"
+          style={{ background: `linear-gradient(to right, ${adjustBrightness(style.bg, 30)}, transparent)` }}
+        />
+        <div className="absolute right-0 top-0 bottom-0 w-[2px] rounded-r-[2px]"
+          style={{ background: `linear-gradient(to left, ${adjustBrightness(style.bg, -30)}, transparent)` }}
+        />
 
-        {/* Decorative band at top */}
-        <div className={`absolute top-3 left-1 right-1 h-1.5 ${color.accent} rounded-full opacity-60`} />
+        {/* Decorative gold/silver band at top */}
+        <div
+          className="absolute top-4 left-[3px] right-[3px] h-[2px] rounded-full"
+          style={{
+            background: `linear-gradient(to bottom, ${style.accent}, ${adjustBrightness(style.accent, -20)})`,
+            boxShadow: `0 1px 2px rgba(0,0,0,0.3), inset 0 1px 0 rgba(255,255,255,0.3)`,
+          }}
+        />
 
-        {/* Book title - rotated vertically */}
-        <div className="absolute inset-0 flex items-center justify-center overflow-hidden p-1">
-          <span
-            className={`${color.text} text-[10px] font-medium whitespace-nowrap transform -rotate-90 origin-center`}
+        {/* Title and Author - vertical text */}
+        <div className="absolute inset-0 flex flex-col items-center justify-center overflow-hidden">
+          {/* Title */}
+          <div
+            className="flex items-center justify-center"
             style={{
-              maxWidth: `${height - 40}px`,
-              overflow: 'hidden',
-              textOverflow: 'ellipsis',
+              writingMode: 'vertical-rl',
+              textOrientation: 'mixed',
+              transform: 'rotate(180deg)',
+              height: height - 70,
+              padding: '4px 2px',
             }}
           >
-            {book.title}
-          </span>
+            <span
+              className="font-serif font-semibold text-center leading-tight"
+              style={{
+                color: style.text,
+                fontSize: width > 40 ? '11px' : '9px',
+                textShadow: '0 1px 2px rgba(0,0,0,0.3)',
+                overflow: 'hidden',
+                textOverflow: 'ellipsis',
+                display: '-webkit-box',
+                WebkitLineClamp: 3,
+                WebkitBoxOrient: 'vertical',
+                maxHeight: height - 80,
+              }}
+            >
+              {book.title}
+            </span>
+          </div>
+
+          {/* Author - smaller, at bottom */}
+          <div
+            className="absolute bottom-8"
+            style={{
+              writingMode: 'vertical-rl',
+              textOrientation: 'mixed',
+              transform: 'rotate(180deg)',
+            }}
+          >
+            <span
+              className="font-serif text-center opacity-80"
+              style={{
+                color: style.text,
+                fontSize: '7px',
+                textShadow: '0 1px 1px rgba(0,0,0,0.3)',
+                maxHeight: 50,
+                overflow: 'hidden',
+                textOverflow: 'ellipsis',
+                whiteSpace: 'nowrap',
+              }}
+            >
+              {authorName}
+            </span>
+          </div>
         </div>
 
         {/* Decorative band at bottom */}
-        <div className={`absolute bottom-3 left-1 right-1 h-1.5 ${color.accent} rounded-full opacity-60`} />
+        <div
+          className="absolute bottom-4 left-[3px] right-[3px] h-[2px] rounded-full"
+          style={{
+            background: `linear-gradient(to bottom, ${style.accent}, ${adjustBrightness(style.accent, -20)})`,
+            boxShadow: `0 1px 2px rgba(0,0,0,0.3), inset 0 1px 0 rgba(255,255,255,0.3)`,
+          }}
+        />
 
-        {/* Processing indicator */}
+        {/* Processing overlay */}
         {book.processingStatus === 'PROCESSING' && (
-          <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2">
-            <div className="h-3 w-3 animate-spin rounded-full border-2 border-white/50 border-t-transparent" />
+          <div className="absolute inset-0 flex items-center justify-center bg-black/30 rounded-[2px]">
+            <div className="h-4 w-4 animate-spin rounded-full border-2 border-white/70 border-t-transparent" />
           </div>
         )}
 
-        {/* Status indicator dot */}
-        <div className={`absolute bottom-1 left-1/2 -translate-x-1/2 w-2 h-2 rounded-full ${
-          book.processingStatus === 'COMPLETED' ? 'bg-emerald-400' :
-          book.processingStatus === 'PROCESSING' ? 'bg-amber-400 animate-pulse' :
-          book.processingStatus === 'FAILED' ? 'bg-rose-400' :
-          'bg-sky-400'
-        }`} />
+        {/* Hover glow effect */}
+        <div className="absolute inset-0 rounded-[2px] opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none"
+          style={{ boxShadow: '0 0 20px rgba(251, 191, 36, 0.3)' }}
+        />
       </div>
 
       {/* Hover tooltip */}
-      <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 px-3 py-2 bg-surface border border-white/10 rounded-lg shadow-xl opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none z-50 whitespace-nowrap">
-        <p className="text-sm font-medium text-text-primary">{book.title}</p>
-        <p className="text-xs text-text-muted">{book.authors?.join(', ') || 'Unknown author'}</p>
+      <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-3 px-4 py-3 bg-surface/95 backdrop-blur border border-white/20 rounded-lg shadow-2xl opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none z-50 min-w-[200px]">
+        <p className="text-sm font-semibold text-text-primary mb-1">{book.title}</p>
+        <p className="text-xs text-text-secondary">{book.authors?.join(', ') || 'Unknown author'}</p>
         {book.genre && book.genre.length > 0 && (
-          <p className="text-xs text-cosmic-300 mt-1">{book.genre.join(', ')}</p>
+          <div className="flex flex-wrap gap-1 mt-2">
+            {book.genre.map((g) => (
+              <span key={g} className="text-[10px] px-1.5 py-0.5 bg-cosmic-500/20 text-cosmic-300 rounded">
+                {g}
+              </span>
+            ))}
+          </div>
         )}
+        <div className="flex items-center gap-3 mt-2 pt-2 border-t border-white/10">
+          <span className="text-[10px] text-text-muted">
+            {book.totalChapters > 0 ? `${book.totalChapters} chapters` : 'Processing...'}
+          </span>
+          <span className={`text-[10px] px-1.5 py-0.5 rounded ${
+            book.processingStatus === 'COMPLETED' ? 'bg-emerald-500/20 text-emerald-300' :
+            book.processingStatus === 'PROCESSING' ? 'bg-amber-500/20 text-amber-300' :
+            book.processingStatus === 'FAILED' ? 'bg-rose-500/20 text-rose-300' :
+            'bg-sky-500/20 text-sky-300'
+          }`}>
+            {book.processingStatus === 'COMPLETED' ? 'Ready' :
+             book.processingStatus === 'PROCESSING' ? 'Analyzing' :
+             book.processingStatus === 'FAILED' ? 'Failed' : 'Queued'}
+          </span>
+        </div>
+        {/* Tooltip arrow */}
+        <div className="absolute left-1/2 -translate-x-1/2 -bottom-2 w-0 h-0 border-l-8 border-r-8 border-t-8 border-l-transparent border-r-transparent border-t-white/20" />
       </div>
 
       {/* Action menu */}
@@ -1020,4 +1231,14 @@ function BookSpine({ book, isMenuOpen, onMenuToggle, onDelete }: BookSpineProps)
       )}
     </div>
   );
+}
+
+// Helper function to adjust color brightness
+function adjustBrightness(hex: string, percent: number): string {
+  const num = parseInt(hex.replace('#', ''), 16);
+  const amt = Math.round(2.55 * percent);
+  const R = Math.max(0, Math.min(255, (num >> 16) + amt));
+  const G = Math.max(0, Math.min(255, ((num >> 8) & 0x00FF) + amt));
+  const B = Math.max(0, Math.min(255, (num & 0x0000FF) + amt));
+  return `#${(0x1000000 + R * 0x10000 + G * 0x100 + B).toString(16).slice(1)}`;
 }
