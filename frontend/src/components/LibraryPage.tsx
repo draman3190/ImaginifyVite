@@ -705,8 +705,8 @@ export function LibraryPage({ refreshTrigger, onRefreshNeeded }: LibraryPageProp
               />
 
               {/* Render shelves with books */}
-              {Array.from({ length: Math.ceil(displayedBooks.length / 5) }).map((_, shelfIndex) => {
-                const shelfBooks = displayedBooks.slice(shelfIndex * 5, (shelfIndex + 1) * 5);
+              {Array.from({ length: Math.ceil(displayedBooks.length / 4) }).map((_, shelfIndex) => {
+                const shelfBooks = displayedBooks.slice(shelfIndex * 4, (shelfIndex + 1) * 4);
                 return (
                   <div key={shelfIndex} className="relative">
                     {/* Shelf back panel */}
@@ -717,10 +717,10 @@ export function LibraryPage({ refreshTrigger, onRefreshNeeded }: LibraryPageProp
                     />
 
                     {/* Books container */}
-                    <div className="relative flex items-end gap-1 px-6 pt-4 pb-0 min-h-[220px]">
+                    <div className="relative flex items-end gap-2 px-6 pt-4 pb-0 min-h-[260px]">
                       {/* Left bookend */}
                       {shelfIndex === 0 && shelfBooks.length > 0 && (
-                        <div className="flex-shrink-0 w-4 h-[160px] mr-2"
+                        <div className="flex-shrink-0 w-5 h-[180px] mr-2"
                           style={{
                             background: 'linear-gradient(to right, #4A3728, #3D2D22, #2D211A)',
                             borderRadius: '2px',
@@ -744,7 +744,7 @@ export function LibraryPage({ refreshTrigger, onRefreshNeeded }: LibraryPageProp
 
                       {/* Right bookend */}
                       {shelfBooks.length > 0 && (
-                        <div className="flex-shrink-0 w-4 h-[160px] ml-2"
+                        <div className="flex-shrink-0 w-5 h-[180px] ml-2"
                           style={{
                             background: 'linear-gradient(to left, #4A3728, #3D2D22, #2D211A)',
                             borderRadius: '2px',
@@ -997,16 +997,16 @@ function getSpineStyle(book: BookSummary) {
 
 function getSpineDimensions(book: BookSummary) {
   // Height based on chapters/content (taller = more content)
-  const baseHeight = 180;
+  const baseHeight = 200;
   const heightVariance = book.totalChapters > 0
-    ? Math.min(book.totalChapters * 1.5, 30)
+    ? Math.min(book.totalChapters * 1.5, 40)
     : (book.title.length % 15) * 2;
 
-  // Width based on page count or chapters (wider = more pages)
-  const baseWidth = 32;
+  // Width based on page count or chapters (wider = more pages) - wider for readable text
+  const baseWidth = 48;
   const widthVariance = book.totalChapters > 0
-    ? Math.min(book.totalChapters * 0.8, 20)
-    : (book.title.length % 10) * 1.5;
+    ? Math.min(book.totalChapters * 0.6, 16)
+    : (book.title.length % 10) * 1.2;
 
   return {
     height: baseHeight + heightVariance,
@@ -1105,7 +1105,7 @@ function BookSpine({ book, isMenuOpen, onMenuToggle, onDelete }: BookSpineProps)
         />
 
         {/* Title and Author - vertical text */}
-        <div className="absolute inset-0 flex flex-col items-center justify-center overflow-hidden">
+        <div className="absolute inset-0 flex flex-col items-center justify-center overflow-hidden px-1">
           {/* Title */}
           <div
             className="flex items-center justify-center"
@@ -1113,31 +1113,37 @@ function BookSpine({ book, isMenuOpen, onMenuToggle, onDelete }: BookSpineProps)
               writingMode: 'vertical-rl',
               textOrientation: 'mixed',
               transform: 'rotate(180deg)',
-              height: height - 70,
-              padding: '4px 2px',
+              height: height - 60,
+              padding: '8px 0',
             }}
           >
             <span
-              className="font-serif font-semibold text-center leading-tight"
+              className="font-bold text-center leading-snug tracking-wide"
               style={{
                 color: style.text,
-                fontSize: width > 40 ? '11px' : '9px',
-                textShadow: '0 1px 2px rgba(0,0,0,0.3)',
+                fontSize: '13px',
+                textShadow: `
+                  0 1px 0 rgba(0,0,0,0.4),
+                  0 2px 4px rgba(0,0,0,0.3),
+                  0 0 8px rgba(0,0,0,0.2)
+                `,
+                letterSpacing: '0.5px',
                 overflow: 'hidden',
                 textOverflow: 'ellipsis',
                 display: '-webkit-box',
-                WebkitLineClamp: 3,
+                WebkitLineClamp: 2,
                 WebkitBoxOrient: 'vertical',
-                maxHeight: height - 80,
+                maxHeight: height - 70,
+                fontFamily: 'Georgia, "Times New Roman", serif',
               }}
             >
               {book.title}
             </span>
           </div>
 
-          {/* Author - smaller, at bottom */}
+          {/* Author - at bottom with better visibility */}
           <div
-            className="absolute bottom-8"
+            className="absolute bottom-7"
             style={{
               writingMode: 'vertical-rl',
               textOrientation: 'mixed',
@@ -1145,15 +1151,17 @@ function BookSpine({ book, isMenuOpen, onMenuToggle, onDelete }: BookSpineProps)
             }}
           >
             <span
-              className="font-serif text-center opacity-80"
+              className="font-medium text-center"
               style={{
-                color: style.text,
-                fontSize: '7px',
-                textShadow: '0 1px 1px rgba(0,0,0,0.3)',
-                maxHeight: 50,
+                color: style.accent,
+                fontSize: '9px',
+                textShadow: '0 1px 2px rgba(0,0,0,0.5)',
+                letterSpacing: '0.3px',
+                maxHeight: 60,
                 overflow: 'hidden',
                 textOverflow: 'ellipsis',
                 whiteSpace: 'nowrap',
+                fontFamily: 'Georgia, "Times New Roman", serif',
               }}
             >
               {authorName}
