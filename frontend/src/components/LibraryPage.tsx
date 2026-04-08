@@ -1,6 +1,7 @@
 import { useState, useEffect, useMemo } from 'react';
 import { useBooks } from '../hooks/useBooks';
 import { DeleteConfirmModal } from './DeleteConfirmModal';
+import type { BookSummary } from '../types/book';
 
 interface LibraryPageProps {
   refreshTrigger?: number;
@@ -87,6 +88,9 @@ export function LibraryPage({ refreshTrigger, onRefreshNeeded }: LibraryPageProp
 
   // Dropdown open states for filters
   const [openDropdown, setOpenDropdown] = useState<string | null>(null);
+
+  // View mode: 'grid' (table) or 'shelf' (bookshelf)
+  const [viewMode, setViewMode] = useState<'grid' | 'shelf'>('grid');
 
   const clearFilters = () => {
     setSearchQuery('');
@@ -416,8 +420,38 @@ export function LibraryPage({ refreshTrigger, onRefreshNeeded }: LibraryPageProp
               </span>
             )}
 
+            {/* View mode toggle */}
+            <div className="flex items-center gap-1 ml-auto mr-4">
+              <button
+                onClick={() => setViewMode('grid')}
+                className={`p-1.5 rounded border transition-all cursor-pointer ${
+                  viewMode === 'grid'
+                    ? 'border-ethereal-400/50 text-ethereal-300 shadow-[0_0_10px_rgba(251,191,36,0.3)]'
+                    : 'border-white/10 text-text-secondary hover:text-cosmic-300 hover:border-cosmic-400/30 hover:shadow-[0_0_10px_rgba(139,92,246,0.15)]'
+                }`}
+                title="Grid View"
+              >
+                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6h16M4 10h16M4 14h16M4 18h16" />
+                </svg>
+              </button>
+              <button
+                onClick={() => setViewMode('shelf')}
+                className={`p-1.5 rounded border transition-all cursor-pointer ${
+                  viewMode === 'shelf'
+                    ? 'border-ethereal-400/50 text-ethereal-300 shadow-[0_0_10px_rgba(251,191,36,0.3)]'
+                    : 'border-white/10 text-text-secondary hover:text-cosmic-300 hover:border-cosmic-400/30 hover:shadow-[0_0_10px_rgba(139,92,246,0.15)]'
+                }`}
+                title="Bookshelf View"
+              >
+                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 6.253v13m0-13C10.832 5.477 9.246 5 7.5 5S4.168 5.477 3 6.253v13C4.168 18.477 5.754 18 7.5 18s3.332.477 4.5 1.253m0-13C13.168 5.477 14.754 5 16.5 5c1.747 0 3.332.477 4.5 1.253v13C19.832 18.477 18.247 18 16.5 18c-1.746 0-3.332.477-4.5 1.253" />
+                </svg>
+              </button>
+            </div>
+
             {/* Page size selector */}
-            <div className="flex items-center gap-2 ml-auto">
+            <div className="flex items-center gap-2">
               <span className="text-xs text-text-muted">Show</span>
               <div className="relative">
                 <button
@@ -484,7 +518,7 @@ export function LibraryPage({ refreshTrigger, onRefreshNeeded }: LibraryPageProp
           </div>
         )}
 
-        {filteredBooks.length > 0 && (
+        {filteredBooks.length > 0 && viewMode === 'grid' && (
         <div className="rounded-lg border border-border-subtle">
           <table className="w-full">
             <thead className="bg-raised/50">
@@ -655,6 +689,97 @@ export function LibraryPage({ refreshTrigger, onRefreshNeeded }: LibraryPageProp
         </div>
         )}
 
+        {/* Bookshelf View */}
+        {filteredBooks.length > 0 && viewMode === 'shelf' && (
+          <div className="space-y-8">
+            {/* Render books in shelf rows */}
+            {Array.from({ length: Math.ceil(displayedBooks.length / 6) }).map((_, shelfIndex) => {
+              const shelfBooks = displayedBooks.slice(shelfIndex * 6, (shelfIndex + 1) * 6);
+              return (
+                <div key={shelfIndex} className="relative">
+                  {/* Shelf with books */}
+                  <div className="flex items-end gap-3 px-4 pb-3 min-h-[200px]">
+                    {shelfBooks.map((book) => (
+                      <BookSpine
+                        key={book.bookId}
+                        book={book}
+                        isMenuOpen={openMenuId === book.bookId}
+                        onMenuToggle={() => {
+                          setOpenDropdown(null);
+                          setOpenMenuId(openMenuId === book.bookId ? null : book.bookId);
+                        }}
+                        onDelete={() => handleDeleteClick(book.bookId, book.title)}
+                      />
+                    ))}
+                  </div>
+                  {/* Shelf board */}
+                  <div className="h-3 bg-gradient-to-b from-amber-900/40 to-amber-950/60 rounded-sm shadow-[0_4px_8px_rgba(0,0,0,0.3),inset_0_1px_0_rgba(255,255,255,0.1)]" />
+                  {/* Shelf bracket shadows */}
+                  <div className="absolute -bottom-1 left-4 right-4 h-2 bg-gradient-to-b from-black/20 to-transparent" />
+                </div>
+              );
+            })}
+
+            {/* Pagination controls for shelf view */}
+            {totalPages > 1 && (
+              <div className="flex items-center justify-between px-4 py-3 border border-border-subtle rounded-lg bg-raised/30">
+                <span className="text-xs text-text-muted">
+                  Showing {startIndex + 1}–{Math.min(startIndex + pageSize, filteredBooks.length)} of {filteredBooks.length}
+                </span>
+                <div className="flex items-center gap-2">
+                  <button
+                    onClick={() => setCurrentPage(1)}
+                    disabled={currentPage === 1}
+                    className={`px-2 py-1 text-xs rounded border transition-all cursor-pointer ${
+                      currentPage === 1
+                        ? 'border-white/5 text-text-muted cursor-not-allowed'
+                        : 'border-white/10 text-text-secondary hover:text-cosmic-300 hover:border-cosmic-400/30 hover:shadow-[0_0_10px_rgba(139,92,246,0.15)]'
+                    }`}
+                  >
+                    First
+                  </button>
+                  <button
+                    onClick={() => setCurrentPage(currentPage - 1)}
+                    disabled={currentPage === 1}
+                    className={`px-2 py-1 text-xs rounded border transition-all cursor-pointer ${
+                      currentPage === 1
+                        ? 'border-white/5 text-text-muted cursor-not-allowed'
+                        : 'border-white/10 text-text-secondary hover:text-cosmic-300 hover:border-cosmic-400/30 hover:shadow-[0_0_10px_rgba(139,92,246,0.15)]'
+                    }`}
+                  >
+                    Prev
+                  </button>
+                  <span className="px-3 py-1 text-sm text-text-secondary">
+                    Page <span className="text-ethereal-300 font-medium">{currentPage}</span> of {totalPages}
+                  </span>
+                  <button
+                    onClick={() => setCurrentPage(currentPage + 1)}
+                    disabled={currentPage === totalPages}
+                    className={`px-2 py-1 text-xs rounded border transition-all cursor-pointer ${
+                      currentPage === totalPages
+                        ? 'border-white/5 text-text-muted cursor-not-allowed'
+                        : 'border-white/10 text-text-secondary hover:text-cosmic-300 hover:border-cosmic-400/30 hover:shadow-[0_0_10px_rgba(139,92,246,0.15)]'
+                    }`}
+                  >
+                    Next
+                  </button>
+                  <button
+                    onClick={() => setCurrentPage(totalPages)}
+                    disabled={currentPage === totalPages}
+                    className={`px-2 py-1 text-xs rounded border transition-all cursor-pointer ${
+                      currentPage === totalPages
+                        ? 'border-white/5 text-text-muted cursor-not-allowed'
+                        : 'border-white/10 text-text-secondary hover:text-cosmic-300 hover:border-cosmic-400/30 hover:shadow-[0_0_10px_rgba(139,92,246,0.15)]'
+                    }`}
+                  >
+                    Last
+                  </button>
+                </div>
+              </div>
+            )}
+          </div>
+        )}
+
         {/* Click outside to close menu */}
         {openMenuId && (
           <div
@@ -766,5 +891,133 @@ function ImageStatusCell({ imageStatus, isBookReady }: ImageStatusCellProps) {
   // Default: NOT_STARTED or null - generation will start automatically after book processing
   return (
     <span className="text-xs text-text-muted">Pending</span>
+  );
+}
+
+// Book spine colors based on genre or hash of title
+const SPINE_COLORS = [
+  { bg: 'from-rose-900 to-rose-950', text: 'text-rose-100', accent: 'bg-rose-700' },
+  { bg: 'from-blue-900 to-blue-950', text: 'text-blue-100', accent: 'bg-blue-700' },
+  { bg: 'from-emerald-900 to-emerald-950', text: 'text-emerald-100', accent: 'bg-emerald-700' },
+  { bg: 'from-amber-900 to-amber-950', text: 'text-amber-100', accent: 'bg-amber-700' },
+  { bg: 'from-purple-900 to-purple-950', text: 'text-purple-100', accent: 'bg-purple-700' },
+  { bg: 'from-cyan-900 to-cyan-950', text: 'text-cyan-100', accent: 'bg-cyan-700' },
+  { bg: 'from-pink-900 to-pink-950', text: 'text-pink-100', accent: 'bg-pink-700' },
+  { bg: 'from-indigo-900 to-indigo-950', text: 'text-indigo-100', accent: 'bg-indigo-700' },
+];
+
+function getSpineColor(book: BookSummary) {
+  // Use genre to determine color if available, otherwise hash the title
+  if (book.genre && book.genre.length > 0) {
+    const genreHash = book.genre[0].split('').reduce((acc, char) => acc + char.charCodeAt(0), 0);
+    return SPINE_COLORS[genreHash % SPINE_COLORS.length];
+  }
+  const titleHash = book.title.split('').reduce((acc, char) => acc + char.charCodeAt(0), 0);
+  return SPINE_COLORS[titleHash % SPINE_COLORS.length];
+}
+
+function getSpineHeight(book: BookSummary) {
+  // Vary height based on page count or chapters
+  const baseHeight = 140;
+  const variance = book.totalChapters > 0
+    ? Math.min(book.totalChapters * 2, 40)
+    : Math.min((book.title.length % 20) * 2, 40);
+  return baseHeight + variance;
+}
+
+interface BookSpineProps {
+  book: BookSummary;
+  isMenuOpen: boolean;
+  onMenuToggle: () => void;
+  onDelete: () => void;
+}
+
+function BookSpine({ book, isMenuOpen, onMenuToggle, onDelete }: BookSpineProps) {
+  const color = getSpineColor(book);
+  const height = getSpineHeight(book);
+  const isReady = book.processingStatus === 'COMPLETED';
+
+  return (
+    <div className="relative group">
+      {/* Book spine */}
+      <div
+        className={`relative w-12 rounded-sm cursor-pointer transition-all duration-300 group-hover:-translate-y-2 group-hover:shadow-[0_8px_20px_rgba(0,0,0,0.4)] ${
+          !isReady ? 'opacity-60' : ''
+        }`}
+        style={{ height: `${height}px` }}
+        onClick={onMenuToggle}
+      >
+        {/* Spine background with 3D effect */}
+        <div className={`absolute inset-0 bg-gradient-to-r ${color.bg} rounded-sm`} />
+
+        {/* Left edge highlight */}
+        <div className="absolute left-0 top-0 bottom-0 w-1 bg-white/10 rounded-l-sm" />
+
+        {/* Right edge shadow */}
+        <div className="absolute right-0 top-0 bottom-0 w-1 bg-black/30 rounded-r-sm" />
+
+        {/* Top edge */}
+        <div className="absolute top-0 left-0 right-0 h-1 bg-white/5 rounded-t-sm" />
+
+        {/* Decorative band at top */}
+        <div className={`absolute top-3 left-1 right-1 h-1.5 ${color.accent} rounded-full opacity-60`} />
+
+        {/* Book title - rotated vertically */}
+        <div className="absolute inset-0 flex items-center justify-center overflow-hidden p-1">
+          <span
+            className={`${color.text} text-[10px] font-medium whitespace-nowrap transform -rotate-90 origin-center`}
+            style={{
+              maxWidth: `${height - 40}px`,
+              overflow: 'hidden',
+              textOverflow: 'ellipsis',
+            }}
+          >
+            {book.title}
+          </span>
+        </div>
+
+        {/* Decorative band at bottom */}
+        <div className={`absolute bottom-3 left-1 right-1 h-1.5 ${color.accent} rounded-full opacity-60`} />
+
+        {/* Processing indicator */}
+        {book.processingStatus === 'PROCESSING' && (
+          <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2">
+            <div className="h-3 w-3 animate-spin rounded-full border-2 border-white/50 border-t-transparent" />
+          </div>
+        )}
+
+        {/* Status indicator dot */}
+        <div className={`absolute bottom-1 left-1/2 -translate-x-1/2 w-2 h-2 rounded-full ${
+          book.processingStatus === 'COMPLETED' ? 'bg-emerald-400' :
+          book.processingStatus === 'PROCESSING' ? 'bg-amber-400 animate-pulse' :
+          book.processingStatus === 'FAILED' ? 'bg-rose-400' :
+          'bg-sky-400'
+        }`} />
+      </div>
+
+      {/* Hover tooltip */}
+      <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 px-3 py-2 bg-surface border border-white/10 rounded-lg shadow-xl opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none z-50 whitespace-nowrap">
+        <p className="text-sm font-medium text-text-primary">{book.title}</p>
+        <p className="text-xs text-text-muted">{book.authors?.join(', ') || 'Unknown author'}</p>
+        {book.genre && book.genre.length > 0 && (
+          <p className="text-xs text-cosmic-300 mt-1">{book.genre.join(', ')}</p>
+        )}
+      </div>
+
+      {/* Action menu */}
+      {isMenuOpen && (
+        <div className="absolute top-0 left-full ml-2 w-32 bg-surface border border-ethereal-400/30 rounded-lg shadow-xl shadow-ethereal-500/20 z-50">
+          <button
+            onClick={(e) => {
+              e.stopPropagation();
+              onDelete();
+            }}
+            className="w-full text-left px-3 py-2 text-sm text-rose-400 hover:bg-rose-500/20 hover:shadow-[inset_0_0_10px_rgba(244,63,94,0.1)] transition-all cursor-pointer rounded-lg"
+          >
+            Delete
+          </button>
+        </div>
+      )}
+    </div>
   );
 }
