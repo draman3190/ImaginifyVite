@@ -1,73 +1,94 @@
-# React + TypeScript + Vite
+# Imaginify Frontend
 
-This template provides a minimal setup to get React working in Vite with HMR and some ESLint rules.
+React-based web UI for the Imaginify e-book reader.
 
-Currently, two official plugins are available:
+## Requirements
 
-- [@vitejs/plugin-react](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react) uses [Babel](https://babeljs.io/) (or [oxc](https://oxc.rs) when used in [rolldown-vite](https://vite.dev/guide/rolldown)) for Fast Refresh
-- [@vitejs/plugin-react-swc](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react-swc) uses [SWC](https://swc.rs/) for Fast Refresh
+- Node.js 18+
 
-## React Compiler
+## Setup & Run
 
-The React Compiler is not enabled on this template because of its impact on dev & build performances. To add it, see [this documentation](https://react.dev/learn/react-compiler/installation).
+```bash
+# Install dependencies
+npm install
 
-## Expanding the ESLint configuration
+# Start development server (port 5173)
+npm run dev
 
-If you are developing a production application, we recommend updating the configuration to enable type-aware lint rules:
+# Build for production
+npm run build
 
-```js
-export default defineConfig([
-  globalIgnores(['dist']),
-  {
-    files: ['**/*.{ts,tsx}'],
-    extends: [
-      // Other configs...
+# Preview production build
+npm run preview
 
-      // Remove tseslint.configs.recommended and replace with this
-      tseslint.configs.recommendedTypeChecked,
-      // Alternatively, use this for stricter rules
-      tseslint.configs.strictTypeChecked,
-      // Optionally, add this for stylistic rules
-      tseslint.configs.stylisticTypeChecked,
-
-      // Other configs...
-    ],
-    languageOptions: {
-      parserOptions: {
-        project: ['./tsconfig.node.json', './tsconfig.app.json'],
-        tsconfigRootDir: import.meta.dirname,
-      },
-      // other options...
-    },
-  },
-])
+# Run linter
+npm run lint
 ```
 
-You can also install [eslint-plugin-react-x](https://github.com/Rel1cx/eslint-react/tree/main/packages/plugins/eslint-plugin-react-x) and [eslint-plugin-react-dom](https://github.com/Rel1cx/eslint-react/tree/main/packages/plugins/eslint-plugin-react-dom) for React-specific lint rules:
+## Tech Stack
 
-```js
-// eslint.config.js
-import reactX from 'eslint-plugin-react-x'
-import reactDom from 'eslint-plugin-react-dom'
+- **React 19** — UI framework
+- **Vite 7** — Build tool and dev server
+- **TypeScript 5** — Type safety
+- **Tailwind CSS 4** — Styling (via `@tailwindcss/vite` plugin)
 
-export default defineConfig([
-  globalIgnores(['dist']),
-  {
-    files: ['**/*.{ts,tsx}'],
-    extends: [
-      // Other configs...
-      // Enable lint rules for React
-      reactX.configs['recommended-typescript'],
-      // Enable lint rules for React DOM
-      reactDom.configs.recommended,
-    ],
-    languageOptions: {
-      parserOptions: {
-        project: ['./tsconfig.node.json', './tsconfig.app.json'],
-        tsconfigRootDir: import.meta.dirname,
-      },
-      // other options...
-    },
-  },
-])
+## Project Structure
+
+```
+src/
+├── api/
+│   ├── client.ts         # Fetch wrapper with error handling
+│   ├── libraryApi.ts     # Book management API calls
+│   ├── readerApi.ts      # Reader content API calls
+│   └── imageApi.ts       # Image generation API calls
+├── components/
+│   ├── Layout.tsx        # App shell
+│   ├── TabNavigation.tsx # Navigation tabs
+│   ├── BookLibrary.tsx   # Main container with routing
+│   ├── MyBooksPage.tsx   # Card grid view
+│   ├── LibraryPage.tsx   # Table view
+│   ├── ReaderPage.tsx    # Book selection for reader
+│   ├── ChapterReader.tsx # E-reader component
+│   ├── BookCard.tsx      # Book card component
+│   ├── StatusBadge.tsx   # Status indicator
+│   ├── ProgressBar.tsx   # Progress component
+│   ├── EmptyState.tsx    # Empty state placeholder
+│   ├── UploadBookModal.tsx    # Upload dialog
+│   └── DeleteConfirmModal.tsx # Delete confirmation
+├── hooks/
+│   └── useBooks.ts       # Book data management hook
+├── types/
+│   └── book.ts           # TypeScript types
+├── App.tsx
+└── main.tsx
+```
+
+## Key Features
+
+**Navigation:**
+- URL-based routing (`/`, `/library`, `/reader/{bookId}/{chapter}`)
+- Tab navigation between My Books, Library, and Reader views
+
+**E-Reader (ChapterReader):**
+- ~300 words per page with natural breaks
+- Chapter navigation via dropdown and prev/next buttons
+- Keyboard navigation (arrow keys)
+- Fullscreen mode (F to toggle, ESC to exit)
+- Adjacent chapter prefetching
+
+**Data Management:**
+- Optimistic updates for delete operations
+- Auto-polling every 3s during image generation
+- Cross-tab synchronization via refresh triggers
+
+## Development
+
+The Vite dev server proxies `/library` and `/images` requests to `http://localhost:8080` (the backend). Use the root `./dev.sh` script to start both servers together.
+
+## Environment Variables
+
+Configuration in `.env.development`:
+
+```env
+VITE_API_BASE_URL=http://localhost:8080
 ```

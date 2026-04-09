@@ -29,19 +29,21 @@ All commands run from `backend/`:
 
 ```bash
 cd backend
-./gradlew build              # compile + test
-./gradlew bootRun            # run on port 8080
-./gradlew test               # run all tests (JUnit 5)
+./gradlew build                      # compile + test
+./gradlew bootRun                    # run on port 8080
+./gradlew test                       # run all tests (JUnit 5)
 ./gradlew test --tests "com.imaginify.ImaginifyApplicationTests"  # run single test class
 ./gradlew test --tests "*.ImaginifyApplicationTests.contextLoads" # run single test method
-./gradlew bootJar            # build executable JAR
-./gradlew packageEventHandler # build event handler ZIP (build/event-handler/event-handler.zip)
-./gradlew clean              # clean build artifacts
+./gradlew bootJar                    # build executable JAR
+./gradlew packageLambda              # build Lambda deployment package
+./gradlew packageEventHandler        # build event handler ZIP
+./gradlew packageImageGenerationHandler  # build image generation handler ZIP
+./gradlew clean                      # clean build artifacts
 ```
 
 - Java 21 required
-- Spring Boot 3.5.5, Gradle 9.3.0 (wrapper included)
-- AWS SDK v2 (BOM 2.29.45) for DynamoDB, S3, Secrets Manager
+- Spring Boot 3.5.5, Gradle (wrapper included)
+- AWS SDK v2 (BOM 2.29.45) for DynamoDB, S3, Secrets Manager, Lambda
 - Set `aws.dynamodb.endpoint` in `application.yml` to override for local DynamoDB testing
 - Tests use `@MockitoBean` to mock AWS clients (DynamoDbClient, S3Client, etc.) so no real AWS credentials needed
 - **Running against a deployed stage** — override resource names via args:
@@ -58,11 +60,12 @@ All commands run from `infrastructure/`:
 cd infrastructure
 npm install              # install dependencies
 npm run build            # compile TypeScript (tsc)
+npm run build:backend    # build all Lambda packages (JAR + ZIPs)
 npm test                 # run CDK assertion tests (Jest)
 npm run synth            # synthesize CloudFormation templates
-npm run deploy:beta      # deploy beta stack
-npm run deploy:gamma     # deploy gamma stack
-npm run deploy:prod      # deploy prod stack
+npm run deploy:beta      # deploy beta stack (auto-builds backend)
+npm run deploy:gamma     # deploy gamma stack (auto-builds backend)
+npm run deploy:prod      # deploy prod stack (auto-builds backend)
 npm run deploy:all       # deploy all stacks
 npx cdk list             # list all stacks
 ```
@@ -72,6 +75,7 @@ npx cdk list             # list all stacks
 - All stacks target AWS account 115417277634, us-east-1
 - **First-time setup**: CDK bootstrap is required before first deploy: `npx cdk bootstrap aws://115417277634/us-east-1`
 - AWS credentials must be configured (`aws configure`) before deploy
+- Deploy scripts automatically build backend packages via `predeploy` hooks
 
 ### Frontend (React + Vite + TypeScript)
 
@@ -82,6 +86,7 @@ cd frontend
 npm install              # install dependencies
 npm run dev              # start dev server on port 5173
 npm run build            # production build to dist/
+npm run lint             # run ESLint
 npm run preview          # preview production build locally
 ```
 
@@ -99,21 +104,27 @@ api/
   client.ts              Fetch wrapper with base URL, RFC 7807 error handling
   libraryApi.ts          fetchBooks, deleteBook, initiateUpload, uploadFileToS3
   readerApi.ts           fetchBookDetail, fetchChapterContent
+  imageApi.ts            triggerImageGeneration API calls
 types/
   book.ts                BookSummary, BookDetail, ChapterContent, ChapterSummary
 components/
-  Layout.tsx             App shell with tab navigation (My Books, Library, Reader)
+  Layout.tsx             App shell with header and main content area
+  TabNavigation.tsx      Tab-based navigation component (My Books, Library, Reader)
   BookLibrary.tsx        Main container: tab routing, URL-based navigation
   MyBooksPage.tsx        Card grid view of books with upload modal
   LibraryPage.tsx        Table view with detailed book metadata
   ReaderPage.tsx         Book selection grid for e-reader (filters by completed status)
   ChapterReader.tsx      E-reader with pagination, chapter navigation, fullscreen mode
   BookCard.tsx           Book card with metadata, status badge, progress indicators
+  StatusBadge.tsx        Reusable status indicator component
+  ProgressBar.tsx        Progress indicator for processing/generation status
+  EmptyState.tsx         Empty state placeholder component
   UploadBookModal.tsx    File picker + two-step presigned URL upload flow
   DeleteConfirmModal.tsx Styled confirmation dialog (React portal, dark theme)
 hooks/
   useBooks.ts            Fetch, refresh, delete books with optimistic updates + polling
 App.tsx                  Renders Layout
+main.tsx                 React entry point
 ```
 
 **Key patterns:**
@@ -130,28 +141,81 @@ App.tsx                  Renders Layout
 - Prefetching: Loads adjacent chapters when near page boundaries
 - Deep linking: `/reader/{bookId}/{chapterNumber}` URLs
 
-**Delete modal fix**: Modal renders outside early-return conditions to show "Deleting..." state even when optimistic removal empties the list.
-
 ### Backend Package Structure (`com.imaginify`)
 
 ```
-controller/          REST endpoints (ImageGenerationController, LibraryController)
-service/             Business logic orchestration
-  TextParsingService      Extracts metadata + chapters from text files
-  SegmentDetectionService Splits chapters into reading segments
-  ChapterSummaryService   AI-powered chapter summarization (Gemini)
-  PromptTemplateService   Builds image generation prompts
-  QualityAssuranceService 3-layer image validation
-  ImageFormattingService  Collage extraction, resize, format conversion
-  client/                 AI provider clients (GeminiTextClient, HuggingFaceImageClient)
-handler/             Lambda event handlers
-  BookUploadEventHandler       Processes uploads, triggers image generation
+controller/
+  LibraryController          REST endpoints for book management
+  ImageGenerationController  REST endpoints for image generation
+
+service/
+  LibraryService             Book CRUD operations orchestration
+  TextParsingService         Extracts metadata + chapters from text files
+  SegmentDetectionService    Splits chapters into reading segments
+  ChapterSummaryService      AI-powered chapter summarization (Gemini)
+  PromptTemplateService      Builds image generation prompts
+  QualityAssuranceService    3-layer image validation
+  ImageFormattingService     Collage extraction, resize, format conversion
+  ImageGenerationOrchestrationService  Full image generation pipeline
+  ImageGenerationTriggerService  Triggers async image generation
+  StorageService             S3 file operations
+
+service/client/
+  AiImageGenerationClient    Interface for image generation providers
+  GeminiImageGenerationClient  Gemini image generation implementation
+  GrokImageGenerationClient    Grok image generation (stub)
+  HuggingFaceImageClient       HuggingFace FLUX model implementation
+  TogetherAiImageClient        Together AI image generation
+  GeminiTextClient             Gemini text API for summaries
+  ClaudeVerificationClient     Claude-based image verification
+  GeminiVerificationClient     Gemini-based image verification
+  HuggingFaceVerificationClient  HuggingFace-based image verification
+
+handler/
+  BookUploadEventHandler       S3-triggered, processes uploads
   ImageGenerationEventHandler  Async image generation with QA retries
-repository/          DynamoDB data access (BookRepository)
-config/              AWS SDK bean configuration (AwsConfig, DynamoDbConfig)
-model/               Domain entities: Book, Chapter, Segment, ImageMetadata, ImageStatus
-dto/                 Request/response DTOs (separate from domain models)
-exception/           Custom exceptions + GlobalExceptionHandler (@RestControllerAdvice)
+
+repository/
+  BookRepository             DynamoDB data access
+
+config/
+  AwsConfig                  AWS SDK bean configuration
+  DynamoDbConfig             DynamoDB client configuration
+
+model/
+  Book                       Book entity with chapters
+  Chapter                    Chapter with segments and images
+  Segment                    Reading segment with images
+  ImageMetadata              Image details (url, dimensions, provider)
+  ImageStatus                ENUM: NOT_STARTED, GENERATING, COMPLETED, FAILED
+  ProcessingStatus           ENUM: PENDING_UPLOAD, PROCESSING, COMPLETED, FAILED
+  TextMetadata               Parsed text metadata (title, author, etc.)
+  TextChapter                Parsed chapter data
+  PromptContext              Context for prompt generation
+  QualityScore               Image quality assessment result
+
+dto/request/
+  GenerateImagesRequest      Image generation request
+  UploadBookRequest          Book upload request
+
+dto/response/
+  BookResponse               Full book details with chapters
+  BookSummaryResponse        Book summary for list views
+  ChapterContentResponse     Chapter content for reader
+  GenerateImagesResponse     Image generation result
+  PresignedUploadUrlResponse S3 presigned URL for uploads
+  PresignedDownloadUrlResponse  S3 presigned URL for downloads
+
+exception/
+  GlobalExceptionHandler     @RestControllerAdvice for error handling
+  BookNotFoundException      Book not found (404)
+  BookProcessingException    Processing error
+  ImageGenerationException   Image generation error
+  QualityAssuranceException  QA validation failure
+
+util/
+  SlugUtils                  URL slug generation
+  ChapterTypeDetector        Detect chapter types (content vs transition)
 ```
 
 ### API Endpoints
@@ -169,12 +233,21 @@ exception/           Custom exceptions + GlobalExceptionHandler (@RestController
 `ImageGenerationOrchestrationService` drives the full pipeline:
 1. Fetch book metadata from DynamoDB via `BookRepository`
 2. For each chapter, build prompt context using `PromptTemplateService` (template at `src/main/resources/prompt-templates/visualization-prompt.txt`)
-3. Call AI provider via `AiImageGenerationClient` interface (Gemini or Grok implementations)
+3. Call AI provider via `AiImageGenerationClient` interface (multiple implementations available)
 4. Validate output via `QualityAssuranceService` (three-layer: hard constraints → visual scoring → AI-as-judge)
 5. Process images via `ImageFormattingService` (collage extraction, resize, enhance, format conversion)
 6. Store to S3 via `StorageService`
 
-Several services are stubs throwing `UnsupportedOperationException`: both AI client implementations, QualityAssuranceService, and ImageFormattingService.
+**AI Client Implementations:**
+- `GeminiImageGenerationClient` — Google Gemini image generation
+- `HuggingFaceImageClient` — HuggingFace FLUX model
+- `TogetherAiImageClient` — Together AI models
+- `GrokImageGenerationClient` — Grok (stub)
+
+**Verification Clients:**
+- `ClaudeVerificationClient` — Anthropic Claude for image verification
+- `GeminiVerificationClient` — Google Gemini for image verification
+- `HuggingFaceVerificationClient` — HuggingFace models for verification
 
 ### Infrastructure Stack (`ImaginifyStack`)
 
@@ -235,7 +308,7 @@ S3 PutObject (books/*.txt) → BookUploadEventHandler → ImageGenerationEventHa
 
 **ImageGenerationEventHandler** (plain Java Lambda):
 1. Builds prompts via `PromptTemplateService`
-2. Generates images via `HuggingFaceImageClient` (FLUX model)
+2. Generates images via configured AI client (HuggingFace, Gemini, TogetherAI)
 3. Validates via `QualityAssuranceService` (retries up to 5x on QA failure)
 4. Stores images to S3, updates chapter `images[]` metadata
 5. Sets `imageStatus = COMPLETED`
@@ -273,16 +346,21 @@ Environment variables are set on the Lambda function to configure resource names
 
 ### Build & Deploy Workflow
 
-Deploy scripts automatically build the backend JAR before deploying:
+Deploy scripts automatically build all backend packages before deploying:
 
 ```bash
 cd infrastructure
-npm run deploy:beta    # builds JAR + deploys beta stack
-npm run deploy:gamma   # builds JAR + deploys gamma stack
-npm run deploy:prod    # builds JAR + deploys prod stack
+npm run deploy:beta    # builds JAR + ZIPs, deploys beta stack
+npm run deploy:gamma   # builds JAR + ZIPs, deploys gamma stack
+npm run deploy:prod    # builds JAR + ZIPs, deploys prod stack
 ```
 
-To build the backend JAR and event handler ZIP independently: `npm run build:backend` (from `infrastructure/`).
+To build the backend packages independently: `npm run build:backend` (from `infrastructure/`).
+
+This builds:
+- `backend/build/lambda/imaginify-backend.jar` — Spring Boot backend
+- `backend/build/event-handler/event-handler.zip` — Book upload handler
+- `backend/build/image-generation-handler/image-generation-handler.zip` — Image generation handler
 
 ### Data Layer
 
@@ -307,6 +385,7 @@ To build the backend JAR and event handler ZIP independently: `npm run build:bac
 - **Image collaging**: generate 10-20 images per collage to reduce API costs (fewer calls)
 - **Zero-Trust IAM**: explicit permissions only, no wildcards
 - **DynamoDB**: chosen for quick iteration; may migrate to relational DB later
+- **Multiple AI providers**: support for Gemini, HuggingFace, Together AI for flexibility and fallback
 
 ## Git Conventions
 

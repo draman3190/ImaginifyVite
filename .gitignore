@@ -29,7 +29,12 @@ bin/
 
 ### Mac OS ###
 .DS_Store
+**/.DS_Store
 
 ### Frontend ###
 frontend/node_modules/
 frontend/dist/
+
+### Test files and screenshots ###
+frontend/public/*.txt
+frontend/screenshots/
