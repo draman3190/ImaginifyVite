@@ -2,7 +2,7 @@ import type { ReactNode } from 'react';
 import { TabNavigation } from './TabNavigation';
 
 const TABS = [
-  { id: 'my-books', label: 'My Books' },
+  { id: 'my-books', label: 'Statistics' },
   { id: 'library', label: 'Library' },
   { id: 'reader', label: 'Reader' },
 ];
