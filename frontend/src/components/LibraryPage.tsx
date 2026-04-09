@@ -1034,6 +1034,7 @@ function BookSpine({ book, isMenuOpen, onMenuToggle, onDelete }: BookSpineProps)
   const tilt = getRandomTilt(book.bookId);
   const isReady = book.processingStatus === 'COMPLETED';
   const authorName = book.authors?.[0] || 'Unknown';
+  const hasRaisedBands = style.texture === 'leather';
 
   return (
     <div
@@ -1042,11 +1043,11 @@ function BookSpine({ book, isMenuOpen, onMenuToggle, onDelete }: BookSpineProps)
     >
       {/* Book shadow on shelf */}
       <div
-        className="absolute -bottom-1 left-1/2 -translate-x-1/2 bg-black/40 rounded-full"
+        className="absolute -bottom-1 left-1/2 -translate-x-1/2 bg-black/50 rounded-full"
         style={{
-          width: width + 6,
-          height: 6,
-          filter: 'blur(3px)',
+          width: width + 8,
+          height: 8,
+          filter: 'blur(4px)',
         }}
       />
 
@@ -1063,56 +1064,115 @@ function BookSpine({ book, isMenuOpen, onMenuToggle, onDelete }: BookSpineProps)
           className="absolute inset-0"
           style={{
             background: `linear-gradient(to right,
-              ${adjustBrightness(style.bg, -20)} 0%,
-              ${adjustBrightness(style.bg, 20)} 10%,
-              ${adjustBrightness(style.bg, 30)} 25%,
-              ${adjustBrightness(style.bg, 15)} 45%,
-              ${adjustBrightness(style.bg, 0)} 55%,
-              ${adjustBrightness(style.bg, -10)} 75%,
-              ${adjustBrightness(style.bg, -25)} 90%,
-              ${adjustBrightness(style.bg, -35)} 100%
+              ${adjustBrightness(style.bg, -25)} 0%,
+              ${adjustBrightness(style.bg, 15)} 8%,
+              ${adjustBrightness(style.bg, 30)} 18%,
+              ${adjustBrightness(style.bg, 20)} 35%,
+              ${adjustBrightness(style.bg, 8)} 50%,
+              ${adjustBrightness(style.bg, -5)} 65%,
+              ${adjustBrightness(style.bg, -18)} 82%,
+              ${adjustBrightness(style.bg, -30)} 92%,
+              ${adjustBrightness(style.bg, -40)} 100%
             )`,
-            borderRadius: '1px 2px 2px 1px',
+            borderRadius: '2px',
             boxShadow: `
-              inset 1px 0 2px rgba(255,255,255,0.08),
-              inset -1px 0 2px rgba(0,0,0,0.15)
+              inset 2px 0 4px rgba(255,255,255,0.12),
+              inset -2px 0 4px rgba(0,0,0,0.25),
+              inset 0 2px 3px rgba(0,0,0,0.15),
+              inset 0 -2px 3px rgba(0,0,0,0.1)
             `,
           }}
         />
 
-        {/* Subtle texture overlay */}
+        {/* Leather/cloth texture overlay */}
         <div
-          className="absolute inset-0 rounded-[1px] opacity-[0.08]"
+          className="absolute inset-0 rounded-[2px]"
           style={{
-            backgroundImage: `url("data:image/svg+xml,%3Csvg viewBox='0 0 200 200' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noise'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23noise)'/%3E%3C/svg%3E")`,
+            backgroundImage: style.texture === 'leather'
+              ? `url("data:image/svg+xml,%3Csvg viewBox='0 0 200 200' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noise'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.7' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23noise)'/%3E%3C/svg%3E")`
+              : `url("data:image/svg+xml,%3Csvg viewBox='0 0 200 200' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noise'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='1.2' numOctaves='3' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23noise)'/%3E%3C/svg%3E")`,
+            opacity: 0.18,
             mixBlendMode: 'overlay',
           }}
         />
 
-        {/* Top edge - subtle page indication */}
+        {/* Vertical grain texture */}
         <div
-          className="absolute -top-[2px] left-[2px] right-[2px] h-[2px]"
+          className="absolute inset-0 rounded-[2px] opacity-[0.06]"
           style={{
-            background: 'linear-gradient(to bottom, rgba(245,242,235,0.9), rgba(220,215,205,0.7))',
-            borderRadius: '1px 1px 0 0',
+            backgroundImage: `repeating-linear-gradient(
+              180deg,
+              transparent 0px,
+              rgba(0,0,0,0.15) 1px,
+              transparent 2px,
+              transparent 5px
+            )`,
           }}
         />
 
-        {/* Spine edge highlights */}
+        {/* Top edge - thin page line */}
         <div
-          className="absolute left-0 top-0 bottom-0 w-[1px]"
+          className="absolute top-0 left-[3px] right-[3px] h-[1px]"
           style={{
-            background: 'linear-gradient(to bottom, rgba(255,255,255,0.15), rgba(255,255,255,0.05), rgba(255,255,255,0.1))',
-          }}
-        />
-        <div
-          className="absolute right-0 top-0 bottom-0 w-[1px]"
-          style={{
-            background: 'linear-gradient(to bottom, rgba(0,0,0,0.2), rgba(0,0,0,0.1), rgba(0,0,0,0.15))',
+            background: 'linear-gradient(to right, rgba(200,195,185,0.4), rgba(230,225,215,0.6), rgba(200,195,185,0.4))',
           }}
         />
 
-        {/* Title and Author - gilt text */}
+        {/* Raised bands for leather books */}
+        {hasRaisedBands && (
+          <>
+            {[0.18, 0.82].map((pos, i) => (
+              <div
+                key={i}
+                className="absolute left-[3px] right-[3px] h-[3px]"
+                style={{
+                  top: `${pos * 100}%`,
+                  background: `linear-gradient(to bottom,
+                    ${adjustBrightness(style.bg, 20)} 0%,
+                    ${adjustBrightness(style.bg, 35)} 40%,
+                    ${adjustBrightness(style.bg, 10)} 60%,
+                    ${adjustBrightness(style.bg, -15)} 100%
+                  )`,
+                  borderRadius: '1px',
+                  boxShadow: `
+                    0 1px 1px rgba(0,0,0,0.25),
+                    inset 0 1px 0 rgba(255,255,255,0.12)
+                  `,
+                }}
+              />
+            ))}
+          </>
+        )}
+
+        {/* Gilt decorative lines */}
+        <div
+          className="absolute left-[5px] right-[5px] h-[1px]"
+          style={{
+            top: hasRaisedBands ? '24%' : '12%',
+            background: `linear-gradient(to right,
+              transparent 0%,
+              ${style.accent}90 15%,
+              ${adjustBrightness(style.accent, 25)} 50%,
+              ${style.accent}90 85%,
+              transparent 100%
+            )`,
+          }}
+        />
+        <div
+          className="absolute left-[5px] right-[5px] h-[1px]"
+          style={{
+            bottom: hasRaisedBands ? '24%' : '12%',
+            background: `linear-gradient(to right,
+              transparent 0%,
+              ${style.accent}90 15%,
+              ${adjustBrightness(style.accent, 25)} 50%,
+              ${style.accent}90 85%,
+              transparent 100%
+            )`,
+          }}
+        />
+
+        {/* Title and Author - gilt embossed text */}
         <div className="absolute inset-0 flex flex-col items-center justify-center overflow-hidden">
           {/* Title */}
           <div
@@ -1121,26 +1181,27 @@ function BookSpine({ book, isMenuOpen, onMenuToggle, onDelete }: BookSpineProps)
               writingMode: 'vertical-rl',
               textOrientation: 'mixed',
               transform: 'rotate(180deg)',
-              height: height - 40,
-              padding: '16px 0',
+              height: height - 55,
+              padding: '20px 0',
             }}
           >
             <span
-              className="font-semibold text-center leading-tight"
+              className="font-bold text-center leading-snug"
               style={{
                 color: style.accent,
-                fontSize: '11px',
+                fontSize: '13px',
                 textShadow: `
-                  0 1px 1px rgba(0,0,0,0.4),
-                  0 -1px 0 rgba(255,255,255,0.08)
+                  0 1px 0 rgba(0,0,0,0.5),
+                  0 -1px 0 rgba(255,255,255,0.15),
+                  0 2px 3px rgba(0,0,0,0.25)
                 `,
-                letterSpacing: '0.5px',
+                letterSpacing: '0.8px',
                 overflow: 'hidden',
                 textOverflow: 'ellipsis',
                 display: '-webkit-box',
                 WebkitLineClamp: 2,
                 WebkitBoxOrient: 'vertical',
-                maxHeight: height - 50,
+                maxHeight: height - 65,
                 fontFamily: 'Georgia, "Times New Roman", serif',
               }}
             >
@@ -1150,7 +1211,7 @@ function BookSpine({ book, isMenuOpen, onMenuToggle, onDelete }: BookSpineProps)
 
           {/* Author - at bottom */}
           <div
-            className="absolute bottom-4"
+            className="absolute bottom-6"
             style={{
               writingMode: 'vertical-rl',
               textOrientation: 'mixed',
@@ -1158,13 +1219,16 @@ function BookSpine({ book, isMenuOpen, onMenuToggle, onDelete }: BookSpineProps)
             }}
           >
             <span
-              className="text-center opacity-90"
+              className="font-semibold text-center"
               style={{
                 color: style.accent,
-                fontSize: '8px',
-                textShadow: '0 1px 1px rgba(0,0,0,0.3)',
-                letterSpacing: '0.3px',
-                maxHeight: 50,
+                fontSize: '9px',
+                textShadow: `
+                  0 1px 0 rgba(0,0,0,0.4),
+                  0 -1px 0 rgba(255,255,255,0.1)
+                `,
+                letterSpacing: '0.5px',
+                maxHeight: 55,
                 overflow: 'hidden',
                 textOverflow: 'ellipsis',
                 whiteSpace: 'nowrap',
@@ -1176,19 +1240,17 @@ function BookSpine({ book, isMenuOpen, onMenuToggle, onDelete }: BookSpineProps)
           </div>
         </div>
 
-        {/* Subtle top/bottom edge darkening */}
+        {/* Subtle edge wear */}
         <div
-          className="absolute inset-x-0 top-0 h-6 pointer-events-none"
+          className="absolute top-0 left-0 right-0 h-3 pointer-events-none rounded-t-[2px]"
           style={{
-            background: 'linear-gradient(to bottom, rgba(0,0,0,0.1), transparent)',
-            borderRadius: '1px 2px 0 0',
+            background: 'linear-gradient(to bottom, rgba(0,0,0,0.12), transparent)',
           }}
         />
         <div
-          className="absolute inset-x-0 bottom-0 h-4 pointer-events-none"
+          className="absolute bottom-0 left-0 right-0 h-2 pointer-events-none rounded-b-[2px]"
           style={{
             background: 'linear-gradient(to top, rgba(0,0,0,0.08), transparent)',
-            borderRadius: '0 0 2px 1px',
           }}
         />
 
@@ -1203,7 +1265,7 @@ function BookSpine({ book, isMenuOpen, onMenuToggle, onDelete }: BookSpineProps)
         <div
           className="absolute inset-0 rounded-[2px] opacity-0 group-hover:opacity-100 transition-opacity duration-200 pointer-events-none"
           style={{
-            boxShadow: '0 0 20px rgba(251, 191, 36, 0.35)',
+            boxShadow: '0 0 24px rgba(251, 191, 36, 0.4)',
           }}
         />
       </div>
