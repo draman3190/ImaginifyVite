@@ -1366,8 +1366,8 @@ export function ChapterReader({ bookId, initialChapter, onBack }: ChapterReaderP
                         : 'bg-cosmic-500/15 border border-cosmic-400/40 shadow-[0_0_10px_rgba(139,92,246,0.3)]'
                     }`}
                     style={{
-                      left: firstBubble.x + firstBubble.width + 4,
-                      top: firstBubble.y - 16,
+                      left: firstBubble.x + firstBubble.width + 10,
+                      top: firstBubble.y - 12,
                     }}
                     title="Edit highlight"
                   >
