@@ -352,72 +352,104 @@ export function ChapterReader({ bookId, initialChapter, onBack }: ChapterReaderP
   }, [bookId]);
 
   // Calculate highlight bubbles from DOM markers
-  useEffect(() => {
-    const calculateHighlightBubbles = () => {
-      const readingArea = readingAreaRef.current;
-      if (!readingArea) return;
+  const calculateHighlightBubbles = useCallback(() => {
+    const readingArea = readingAreaRef.current;
+    if (!readingArea) return;
 
-      const markers = readingArea.querySelectorAll('.highlight-marker');
-      const tempBubbles: Array<{
-        id: string;
-        x: number;
-        y: number;
-        width: number;
-        height: number;
-        color: string;
-        borderColor: string;
-        hasNote: boolean;
-        note?: string;
-        highlightText?: string;
-      }> = [];
+    const markers = readingArea.querySelectorAll('.highlight-marker');
+    const tempBubbles: Array<{
+      id: string;
+      x: number;
+      y: number;
+      width: number;
+      height: number;
+      color: string;
+      borderColor: string;
+      hasNote: boolean;
+      note?: string;
+      highlightText?: string;
+    }> = [];
 
-      const containerRect = readingArea.getBoundingClientRect();
+    const containerRect = readingArea.getBoundingClientRect();
 
-      markers.forEach((marker) => {
-        const highlightId = marker.getAttribute('data-highlight-id');
-        if (!highlightId) return;
+    markers.forEach((marker) => {
+      const highlightId = marker.getAttribute('data-highlight-id');
+      if (!highlightId) return;
 
-        const highlight = highlights.find(h => h.id === highlightId);
-        if (!highlight) return;
+      const highlight = highlights.find(h => h.id === highlightId);
+      if (!highlight) return;
 
-        const range = document.createRange();
-        range.selectNodeContents(marker);
-        const rects = range.getClientRects();
+      const range = document.createRange();
+      range.selectNodeContents(marker);
+      const rects = range.getClientRects();
 
-        for (let i = 0; i < rects.length; i++) {
-          const rect = rects[i];
-          // Filter out whitespace/newline artifacts at line breaks
-          // These are typically < 15px wide and appear at line endings
-          if (rect.width > 15 && rect.height > 0) {
-            tempBubbles.push({
-              id: highlightId,
-              x: rect.left - containerRect.left + readingArea.scrollLeft,
-              y: rect.top - containerRect.top + readingArea.scrollTop,
-              width: rect.width,
-              height: rect.height,
-              color: highlight.color,
-              borderColor: highlight.borderColor || highlight.color,
-              hasNote: !!highlight.note,
-              note: highlight.note,
-              highlightText: highlight.text,
-            });
-          }
+      for (let i = 0; i < rects.length; i++) {
+        const rect = rects[i];
+        // Filter out whitespace/newline artifacts at line breaks
+        // These are typically < 15px wide and appear at line endings
+        if (rect.width > 15 && rect.height > 0) {
+          tempBubbles.push({
+            id: highlightId,
+            x: rect.left - containerRect.left + readingArea.scrollLeft,
+            y: rect.top - containerRect.top + readingArea.scrollTop,
+            width: rect.width,
+            height: rect.height,
+            color: highlight.color,
+            borderColor: highlight.borderColor || highlight.color,
+            hasNote: !!highlight.note,
+            note: highlight.note,
+            highlightText: highlight.text,
+          });
         }
-      });
+      }
+    });
 
-      // Mark the last bubble for each highlight ID
-      const bubbles = tempBubbles.map((bubble, index) => {
-        const isLastForId = tempBubbles.findIndex((b, i) => i > index && b.id === bubble.id) === -1;
-        return { ...bubble, isLast: isLastForId };
-      });
+    // Mark the last bubble for each highlight ID
+    const bubbles = tempBubbles.map((bubble, index) => {
+      const isLastForId = tempBubbles.findIndex((b, i) => i > index && b.id === bubble.id) === -1;
+      return { ...bubble, isLast: isLastForId };
+    });
 
-      setHighlightBubbles(bubbles);
-    };
+    setHighlightBubbles(bubbles);
+  }, [highlights]);
 
-    // Calculate after render
+  // Recalculate highlight bubbles when content changes
+  useEffect(() => {
     const timeoutId = setTimeout(calculateHighlightBubbles, 50);
     return () => clearTimeout(timeoutId);
-  }, [highlights, currentPage, currentChapter, chapter]);
+  }, [calculateHighlightBubbles, currentPage, currentChapter, chapter]);
+
+  // Recalculate highlights when fullscreen changes - hide during transition to avoid glitch
+  useEffect(() => {
+    // Clear bubbles immediately to hide them during transition
+    setHighlightBubbles([]);
+
+    // Recalculate after transition completes (fullscreen transitions typically take ~300ms)
+    const timeoutId = setTimeout(calculateHighlightBubbles, 350);
+    return () => clearTimeout(timeoutId);
+  }, [calculateHighlightBubbles, isFullscreen]);
+
+  // Use ResizeObserver to recalculate highlights when reading area resizes (window resize)
+  useEffect(() => {
+    const readingArea = readingAreaRef.current;
+    if (!readingArea) return;
+
+    let resizeTimeout: ReturnType<typeof setTimeout>;
+    const resizeObserver = new ResizeObserver(() => {
+      // Debounce and use requestAnimationFrame for accurate layout
+      clearTimeout(resizeTimeout);
+      resizeTimeout = setTimeout(() => {
+        requestAnimationFrame(calculateHighlightBubbles);
+      }, 100);
+    });
+
+    resizeObserver.observe(readingArea);
+
+    return () => {
+      clearTimeout(resizeTimeout);
+      resizeObserver.disconnect();
+    };
+  }, [calculateHighlightBubbles]);
 
   // Apply a highlight to the selected text
   const applyHighlight = useCallback((colorIndex: number) => {
