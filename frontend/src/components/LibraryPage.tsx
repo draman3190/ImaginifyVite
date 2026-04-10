@@ -1261,11 +1261,15 @@ function BookSpine({ book, isMenuOpen, onMenuToggle, onDelete }: BookSpineProps)
           </div>
         )}
 
-        {/* Hover glow effect */}
+        {/* Hover glow effect - cosmic purple on hover, golden when selected */}
         <div
-          className="absolute inset-0 rounded-[2px] opacity-0 group-hover:opacity-100 transition-opacity duration-200 pointer-events-none"
+          className={`absolute inset-0 rounded-[2px] transition-opacity duration-200 pointer-events-none ${
+            isMenuOpen ? 'opacity-100' : 'opacity-0 group-hover:opacity-100'
+          }`}
           style={{
-            boxShadow: '0 0 24px rgba(251, 191, 36, 0.4)',
+            boxShadow: isMenuOpen
+              ? '0 0 24px rgba(251, 191, 36, 0.5)'  // Golden when selected
+              : '0 0 24px rgba(139, 92, 246, 0.5)', // Cosmic purple on hover
           }}
         />
       </div>

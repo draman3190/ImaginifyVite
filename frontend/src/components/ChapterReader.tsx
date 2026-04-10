@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback, useMemo, useRef } from 'react';
+import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import { fetchBookDetail, fetchChapterContent } from '../api/readerApi';
 import type { BookDetail, ChapterContent, ChapterSummary, ChapterImage } from '../types/book';
 
@@ -109,6 +109,102 @@ interface DictionaryPopupState {
   entry: DictionaryEntry | null;
 }
 
+// Highlight types
+interface TextHighlight {
+  id: string;
+  bookId: string;
+  chapterNumber: number;
+  pageIndex: number;
+  text: string;
+  startOffset: number;
+  endOffset: number;
+  color: string;
+  borderColor: string;
+  createdAt: string;
+}
+
+interface SelectionToolbarState {
+  x: number;
+  y: number;
+  text: string;
+  startOffset: number;
+  endOffset: number;
+}
+
+// Soothing highlight colors that blend with the dark theme
+const HIGHLIGHT_COLORS = [
+  { name: 'Lavender', color: 'rgba(167, 139, 250, 0.35)', border: 'rgba(167, 139, 250, 0.5)' },  // Soft purple
+  { name: 'Sage', color: 'rgba(134, 239, 172, 0.30)', border: 'rgba(134, 239, 172, 0.45)' },     // Soft green
+  { name: 'Rose', color: 'rgba(251, 182, 206, 0.32)', border: 'rgba(251, 182, 206, 0.48)' },     // Soft pink
+  { name: 'Sky', color: 'rgba(125, 211, 252, 0.30)', border: 'rgba(125, 211, 252, 0.45)' },      // Soft blue
+  { name: 'Amber', color: 'rgba(252, 211, 77, 0.28)', border: 'rgba(252, 211, 77, 0.42)' },      // Soft yellow
+];
+
+// localStorage helpers for highlights
+function getStoredHighlights(bookId: string): TextHighlight[] {
+  try {
+    const data = localStorage.getItem(`imaginify-highlights-${bookId}`);
+    return data ? JSON.parse(data) : [];
+  } catch {
+    return [];
+  }
+}
+
+function saveHighlights(bookId: string, highlights: TextHighlight[]) {
+  try {
+    localStorage.setItem(`imaginify-highlights-${bookId}`, JSON.stringify(highlights));
+  } catch {
+    // Ignore storage errors
+  }
+}
+
+// Render text with highlight markers (for DOM lookup, overlays rendered separately)
+function renderTextWithHighlights(
+  text: string,
+  highlights: TextHighlight[],
+  chapterNumber: number,
+  pageIndex: number
+): React.ReactNode {
+  // Filter highlights for this chapter and page
+  const pageHighlights = highlights.filter(
+    h => h.chapterNumber === chapterNumber && h.pageIndex === pageIndex
+  ).sort((a, b) => a.startOffset - b.startOffset);
+
+  if (pageHighlights.length === 0) {
+    return text;
+  }
+
+  const result: React.ReactNode[] = [];
+  let lastEnd = 0;
+
+  pageHighlights.forEach((highlight, index) => {
+    // Add text before this highlight
+    if (highlight.startOffset > lastEnd) {
+      result.push(text.slice(lastEnd, highlight.startOffset));
+    }
+
+    // Add marked span for highlight (overlay renders the visual bubble)
+    result.push(
+      <span
+        key={`highlight-${index}`}
+        data-highlight-id={highlight.id}
+        className="highlight-marker"
+      >
+        {text.slice(highlight.startOffset, highlight.endOffset)}
+      </span>
+    );
+
+    lastEnd = highlight.endOffset;
+  });
+
+  // Add remaining text
+  if (lastEnd < text.length) {
+    result.push(text.slice(lastEnd));
+  }
+
+  return result;
+}
+
 export function ChapterReader({ bookId, initialChapter, onBack }: ChapterReaderProps) {
   const [book, setBook] = useState<BookDetail | null>(null);
   const [chapter, setChapter] = useState<ChapterContent | null>(null);
@@ -124,6 +220,12 @@ export function ChapterReader({ bookId, initialChapter, onBack }: ChapterReaderP
   // Dictionary popup state
   const [dictionaryPopup, setDictionaryPopup] = useState<DictionaryPopupState | null>(null);
 
+  // Persistent text highlights
+  const [highlights, setHighlights] = useState<TextHighlight[]>([]);
+
+  // Selection toolbar state (appears when text is selected)
+  const [selectionToolbar, setSelectionToolbar] = useState<SelectionToolbarState | null>(null);
+
   // Selection highlight bubble state - array for multi-line selections
   const [selectionBubbles, setSelectionBubbles] = useState<Array<{
     x: number;
@@ -132,8 +234,24 @@ export function ChapterReader({ bookId, initialChapter, onBack }: ChapterReaderP
     height: number;
   }>>([]);
 
+  // Persistent highlight bubble state - rendered as overlays like selection bubbles
+  const [highlightBubbles, setHighlightBubbles] = useState<Array<{
+    id: string;
+    x: number;
+    y: number;
+    width: number;
+    height: number;
+    color: string;
+    borderColor: string;
+  }>>([]);
+
   // Track if selection is in progress (purple) vs completed (yellow)
   const [isSelecting, setIsSelecting] = useState(false);
+
+  // Fullscreen UI auto-hide state
+  const [showControls, setShowControls] = useState(true);
+  const controlsTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const CONTROLS_HIDE_DELAY = 2000; // 2 seconds of idle before hiding
 
   // Container ref for fullscreen
   const containerRef = useRef<HTMLDivElement>(null);
@@ -144,6 +262,12 @@ export function ChapterReader({ bookId, initialChapter, onBack }: ChapterReaderP
 
   // Ref for detecting double-clicks to skip purple "selecting" state
   const lastMouseDownTimeRef = useRef<number>(0);
+
+  // Ref to track selection text on mousedown (to detect dismiss clicks vs new selections)
+  const selectionOnMouseDownRef = useRef<string>('');
+
+  // Ref to track mouse position on mousedown (to detect drag vs click)
+  const mouseDownPosRef = useRef<{ x: number; y: number } | null>(null);
 
   // Prevent duplicate chapter loads
   const loadingChapterRef = useRef<number | null>(null);
@@ -172,6 +296,119 @@ export function ChapterReader({ bookId, initialChapter, onBack }: ChapterReaderP
       setError(err instanceof Error ? err.message : 'Failed to load book');
     }
   }, [bookId]);
+
+  // Load highlights from localStorage when book changes
+  useEffect(() => {
+    setHighlights(getStoredHighlights(bookId));
+  }, [bookId]);
+
+  // Calculate highlight bubbles from DOM markers
+  useEffect(() => {
+    const calculateHighlightBubbles = () => {
+      const readingArea = readingAreaRef.current;
+      if (!readingArea) return;
+
+      const markers = readingArea.querySelectorAll('.highlight-marker');
+      const bubbles: Array<{
+        id: string;
+        x: number;
+        y: number;
+        width: number;
+        height: number;
+        color: string;
+        borderColor: string;
+      }> = [];
+
+      const containerRect = readingArea.getBoundingClientRect();
+
+      markers.forEach((marker) => {
+        const highlightId = marker.getAttribute('data-highlight-id');
+        if (!highlightId) return;
+
+        const highlight = highlights.find(h => h.id === highlightId);
+        if (!highlight) return;
+
+        const range = document.createRange();
+        range.selectNodeContents(marker);
+        const rects = range.getClientRects();
+
+        for (let i = 0; i < rects.length; i++) {
+          const rect = rects[i];
+          // Filter out whitespace/newline artifacts at line breaks
+          // These are typically < 15px wide and appear at line endings
+          if (rect.width > 15 && rect.height > 0) {
+            bubbles.push({
+              id: highlightId,
+              x: rect.left - containerRect.left + readingArea.scrollLeft,
+              y: rect.top - containerRect.top + readingArea.scrollTop,
+              width: rect.width,
+              height: rect.height,
+              color: highlight.color,
+              borderColor: highlight.borderColor || highlight.color,
+            });
+          }
+        }
+      });
+
+      setHighlightBubbles(bubbles);
+    };
+
+    // Calculate after render
+    const timeoutId = setTimeout(calculateHighlightBubbles, 50);
+    return () => clearTimeout(timeoutId);
+  }, [highlights, currentPage, currentChapter, chapter]);
+
+  // Apply a highlight to the selected text
+  const applyHighlight = useCallback((colorIndex: number) => {
+    if (!selectionToolbar) return;
+
+    const colorConfig = HIGHLIGHT_COLORS[colorIndex];
+
+    // Trim trailing whitespace from the selection
+    const originalText = selectionToolbar.text;
+    const trimmedText = originalText.trimEnd();
+    const trimmedLength = originalText.length - trimmedText.length;
+    const adjustedEndOffset = selectionToolbar.endOffset - trimmedLength;
+
+    // Don't create highlight if trimmed text is empty
+    if (!trimmedText) return;
+
+    const newHighlight: TextHighlight = {
+      id: `${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
+      bookId,
+      chapterNumber: currentChapter,
+      pageIndex: currentPage,
+      text: trimmedText,
+      startOffset: selectionToolbar.startOffset,
+      endOffset: adjustedEndOffset,
+      color: colorConfig.color,
+      borderColor: colorConfig.border,
+      createdAt: new Date().toISOString(),
+    };
+
+    const updatedHighlights = [...highlights, newHighlight];
+    setHighlights(updatedHighlights);
+    saveHighlights(bookId, updatedHighlights);
+
+    // Clear selection and toolbar
+    setSelectionToolbar(null);
+    setSelectionBubbles([]);
+    window.getSelection()?.removeAllRanges();
+  }, [selectionToolbar, bookId, currentChapter, currentPage, highlights]);
+
+  // Remove a highlight
+  const removeHighlight = useCallback((highlightId: string) => {
+    const updatedHighlights = highlights.filter(h => h.id !== highlightId);
+    setHighlights(updatedHighlights);
+    saveHighlights(bookId, updatedHighlights);
+  }, [highlights, bookId]);
+
+  // Close selection toolbar
+  const closeSelectionToolbar = useCallback(() => {
+    setSelectionToolbar(null);
+    setSelectionBubbles([]);
+    window.getSelection()?.removeAllRanges();
+  }, []);
 
   // Preload images with progress tracking
   const preloadImagesWithProgress = useCallback(
@@ -315,7 +552,14 @@ export function ChapterReader({ bookId, initialChapter, onBack }: ChapterReaderP
   // Listen for fullscreen changes (including ESC key exit)
   useEffect(() => {
     const handleFullscreenChange = () => {
-      setIsFullscreen(isFullscreenActive());
+      const isNowFullscreen = isFullscreenActive();
+      setIsFullscreen(isNowFullscreen);
+      // Reset controls visibility when entering/exiting fullscreen
+      setShowControls(true);
+      if (controlsTimeoutRef.current) {
+        clearTimeout(controlsTimeoutRef.current);
+        controlsTimeoutRef.current = null;
+      }
     };
 
     document.addEventListener('fullscreenchange', handleFullscreenChange);
@@ -328,6 +572,45 @@ export function ChapterReader({ bookId, initialChapter, onBack }: ChapterReaderP
       document.removeEventListener('msfullscreenchange', handleFullscreenChange);
     };
   }, []);
+
+  // Auto-hide controls in fullscreen mode after idle
+  useEffect(() => {
+    if (!isFullscreen) return;
+
+    const handleMouseMove = () => {
+      // Show controls on mouse movement
+      setShowControls(true);
+
+      // Clear existing timeout
+      if (controlsTimeoutRef.current) {
+        clearTimeout(controlsTimeoutRef.current);
+      }
+
+      // Start new timeout to hide controls
+      controlsTimeoutRef.current = setTimeout(() => {
+        setShowControls(false);
+      }, CONTROLS_HIDE_DELAY);
+    };
+
+    const container = containerRef.current;
+    if (container) {
+      container.addEventListener('mousemove', handleMouseMove);
+
+      // Start initial hide timer
+      controlsTimeoutRef.current = setTimeout(() => {
+        setShowControls(false);
+      }, CONTROLS_HIDE_DELAY);
+    }
+
+    return () => {
+      if (container) {
+        container.removeEventListener('mousemove', handleMouseMove);
+      }
+      if (controlsTimeoutRef.current) {
+        clearTimeout(controlsTimeoutRef.current);
+      }
+    };
+  }, [isFullscreen]);
 
   // Dictionary lookup function
   const lookupWord = useCallback(async (word: string, x: number, y: number) => {
@@ -438,7 +721,9 @@ export function ChapterReader({ bookId, initialChapter, onBack }: ChapterReaderP
 
         for (let i = 0; i < rects.length; i++) {
           const rect = rects[i];
-          if (rect.width > 0 && rect.height > 0) {
+          // Filter out whitespace/newline artifacts at line breaks
+          // These are typically < 15px wide and appear at line endings
+          if (rect.width > 15 && rect.height > 0) {
             // Convert viewport coordinates to container-relative coordinates
             bubbles.push({
               x: rect.left - containerRect.left + readingArea.scrollLeft,
@@ -454,13 +739,38 @@ export function ChapterReader({ bookId, initialChapter, onBack }: ChapterReaderP
       }
     };
 
-    const handleMouseDown = () => {
+    const handleMouseDown = (e: MouseEvent) => {
       const now = Date.now();
       const timeSinceLastClick = now - lastMouseDownTimeRef.current;
       lastMouseDownTimeRef.current = now;
 
-      // Skip purple "selecting" state for double-clicks (selection is instant)
+      // Track mouse position to detect drag vs click
+      mouseDownPosRef.current = { x: e.clientX, y: e.clientY };
+
+      // Close dictionary popup when clicking outside of it
+      if (!(e.target as HTMLElement).closest('.dictionary-popup')) {
+        setDictionaryPopup(null);
+      }
+
+      // Close selection toolbar when clicking outside of it
+      if (!(e.target as HTMLElement).closest('.selection-toolbar')) {
+        setSelectionToolbar(null);
+      }
+
+      // Track current selection to detect dismiss clicks vs new selections
+      selectionOnMouseDownRef.current = window.getSelection()?.toString().trim() || '';
+
+      // Skip purple "selecting" state for:
+      // - Double-clicks (selection is instant)
+      // - Triple-clicks (expanding existing selection - check if selection exists)
       if (timeSinceLastClick < 300) {
+        return;
+      }
+
+      // If there's already a selection, this might be a triple-click to expand
+      // Don't show purple in this case
+      const existingSelection = window.getSelection()?.toString().trim();
+      if (existingSelection) {
         return;
       }
 
@@ -469,6 +779,7 @@ export function ChapterReader({ bookId, initialChapter, onBack }: ChapterReaderP
 
     const handleMouseUp = (e: MouseEvent) => {
       if ((e.target as HTMLElement).closest('.dictionary-popup')) return;
+      if ((e.target as HTMLElement).closest('.selection-toolbar')) return;
 
       setIsSelecting(false);
 
@@ -481,15 +792,79 @@ export function ChapterReader({ bookId, initialChapter, onBack }: ChapterReaderP
 
       if (!selectedText) {
         setSelectionBubbles([]);
+        setSelectionToolbar(null);
         setDictionaryPopup(null);
         return;
       }
 
       updateBubbles();
 
-      // Only trigger dictionary lookup for valid single words
+      // Check if mouse moved (drag selection vs click selection)
+      const mouseDownPos = mouseDownPosRef.current;
+      const mouseMoved = mouseDownPos
+        ? Math.abs(e.clientX - mouseDownPos.x) > 5 || Math.abs(e.clientY - mouseDownPos.y) > 5
+        : false;
+
+      // Check if this is a dismiss click (selection unchanged from mousedown)
+      const isDismissClick = selectedText === selectionOnMouseDownRef.current;
+
+      // Show selection toolbar for:
+      // - Any drag selection (mouse moved during selection)
+      // - Triple-click selections (paragraph) - mouse didn't move but selection changed
+      // Do NOT show for:
+      // - Double-click selections (dictionary handles those - mouse didn't move, selection is single word)
+      // - Dismiss clicks (clicking without changing selection)
+      const isClickSelection = !mouseMoved && !isDismissClick;
+      const isSingleWord = !selectedText.includes(' ') && /^[a-zA-Z][a-zA-Z'-]*[a-zA-Z]?$/.test(selectedText);
+      const isDoubleClickSelection = isClickSelection && isSingleWord;
+
+      const shouldShowToolbar = !isDoubleClickSelection && !isDismissClick;
+
+      if (shouldShowToolbar) {
+        // Close dictionary popup when showing toolbar
+        setDictionaryPopup(null);
+
+        const range = selection?.getRangeAt(0);
+        if (range && readingArea) {
+          const rect = range.getBoundingClientRect();
+          const containerRect = readingArea.getBoundingClientRect();
+
+          // Calculate text offsets within the page content
+          const textContainer = readingArea.querySelector('.chapter-text-content');
+          let startOffset = 0;
+          let endOffset = 0;
+
+          if (textContainer && range.startContainer.nodeType === Node.TEXT_NODE) {
+            // Walk through text nodes to find offset
+            const walker = document.createTreeWalker(textContainer, NodeFilter.SHOW_TEXT);
+            let currentOffset = 0;
+            let node: Node | null;
+
+            while ((node = walker.nextNode())) {
+              if (node === range.startContainer) {
+                startOffset = currentOffset + range.startOffset;
+              }
+              if (node === range.endContainer) {
+                endOffset = currentOffset + range.endOffset;
+                break;
+              }
+              currentOffset += (node.textContent?.length || 0);
+            }
+          }
+
+          setSelectionToolbar({
+            x: rect.left + rect.width / 2 - containerRect.left + readingArea.scrollLeft,
+            y: rect.top - containerRect.top + readingArea.scrollTop - 10,
+            text: selectedText,
+            startOffset,
+            endOffset,
+          });
+        }
+      }
+
+      // Only trigger dictionary lookup for double-click on valid single words
       const isValidSingleWord = /^[a-zA-Z][a-zA-Z'-]*[a-zA-Z]?$/.test(selectedText) && !selectedText.includes(' ');
-      if (isValidSingleWord) {
+      if (isValidSingleWord && isDoubleClickSelection) {
         selectionTimeoutRef.current = setTimeout(validateAndShowPopup, 200);
       }
     };
@@ -626,7 +1001,9 @@ export function ChapterReader({ bookId, initialChapter, onBack }: ChapterReaderP
       }`}
     >
       {/* Header */}
-      <div className="flex items-center justify-between mb-4 p-4 rounded-lg bg-surface/80 border border-white/10">
+      <div className={`flex items-center justify-between mb-4 p-4 rounded-lg bg-surface/80 border border-white/10 transition-all duration-300 ${
+        isFullscreen && !showControls ? 'opacity-0 -translate-y-4 pointer-events-none' : 'opacity-100 translate-y-0'
+      }`}>
         <button
           onClick={isFullscreen ? toggleFullscreen : onBack}
           className="flex items-center gap-2 text-sm text-text-secondary hover:text-cosmic-300 transition-all cursor-pointer px-3 py-1 rounded border border-transparent hover:border-cosmic-400/30 hover:shadow-[0_0_10px_rgba(139,92,246,0.15)]"
@@ -752,29 +1129,124 @@ export function ChapterReader({ bookId, initialChapter, onBack }: ChapterReaderP
             )}
 
             {/* Chapter text */}
-            <div className="text-text-primary leading-relaxed whitespace-pre-wrap text-base sm:text-lg">
-              {pages[currentPage]}
+            <div className="chapter-text-content text-text-primary leading-relaxed whitespace-pre-wrap text-base sm:text-lg">
+              {renderTextWithHighlights(
+                pages[currentPage],
+                highlights,
+                currentChapter,
+                currentPage
+              )}
             </div>
           </div>
         )}
+
+        {/* Persistent highlight bubbles - rendered as overlays identical to selection bubbles */}
+        {/* Persistent highlight bubbles */}
+        {highlightBubbles.map((bubble, index) => (
+          <div
+            key={`highlight-${bubble.id}-${index}`}
+            className="absolute z-30 rounded-sm cursor-pointer transition-all duration-150 group/bubble"
+            style={{
+              left: bubble.x - 2,
+              top: bubble.y,
+              width: bubble.width + 4,
+              height: bubble.height,
+              backgroundColor: bubble.color,
+              boxShadow: `0 0 12px ${bubble.borderColor}`,
+            }}
+            title="Click to remove highlight"
+            onClick={(e) => {
+              e.stopPropagation();
+              removeHighlight(bubble.id);
+            }}
+          >
+            {/* Remove indicator on hover - only show on first bubble of each highlight */}
+            {index === 0 || highlightBubbles[index - 1]?.id !== bubble.id ? (
+              <span className="absolute -top-1 -right-1 w-4 h-4 bg-rose-500/90 rounded-full opacity-0 group-hover/bubble:opacity-100 transition-opacity flex items-center justify-center z-50">
+                <svg className="w-2.5 h-2.5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M6 18L18 6M6 6l12 12" />
+                </svg>
+              </span>
+            ) : null}
+          </div>
+        ))}
 
         {/* Selection bubble highlights - rendered inside reading area for scroll attachment */}
         {selectionBubbles.map((bubble, index) => (
           <div
             key={index}
-            className={`absolute pointer-events-none z-40 rounded-lg transition-colors duration-150 ${
+            className={`absolute pointer-events-none z-40 rounded-sm transition-colors duration-150 ${
               isSelecting
-                ? 'bg-cosmic-500/25 border border-cosmic-400/40 shadow-[0_0_8px_rgba(139,92,246,0.3)]'
-                : 'bg-ethereal-500/25 border border-ethereal-400/40 shadow-[0_0_8px_rgba(251,191,36,0.3)]'
+                ? 'bg-cosmic-500/30 shadow-[0_0_12px_rgba(139,92,246,0.4)]'
+                : 'bg-ethereal-500/30 shadow-[0_0_12px_rgba(251,191,36,0.4)]'
             }`}
             style={{
-              left: bubble.x - 3,
-              top: bubble.y - 1,
-              width: bubble.width + 6,
-              height: bubble.height + 2,
+              left: bubble.x - 2,
+              top: bubble.y,
+              width: bubble.width + 4,
+              height: bubble.height,
             }}
           />
         ))}
+
+        {/* Selection toolbar - appears when text is selected */}
+        {selectionToolbar && !dictionaryPopup && (
+          <div
+            className="selection-toolbar absolute z-50 flex items-center gap-1 p-1.5 bg-surface/95 backdrop-blur border border-white/20 rounded-lg shadow-xl transition-all duration-200"
+            style={{
+              left: Math.max(80, Math.min(selectionToolbar.x, (readingAreaRef.current?.clientWidth || 400) - 80)),
+              top: Math.max(20, selectionToolbar.y - 8),
+              transform: 'translate(-50%, -100%)',
+            }}
+          >
+            {/* Highlight color options */}
+            <div className="flex items-center gap-1 px-1">
+              <span className="text-[10px] text-text-muted mr-1 uppercase tracking-wide">Highlight</span>
+              {HIGHLIGHT_COLORS.map((colorConfig, index) => (
+                <button
+                  key={colorConfig.name}
+                  type="button"
+                  onMouseDown={(e) => {
+                    e.preventDefault();
+                    e.stopPropagation();
+                  }}
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    applyHighlight(index);
+                  }}
+                  className="w-6 h-6 rounded-full border-2 transition-all hover:scale-110 cursor-pointer"
+                  style={{
+                    backgroundColor: colorConfig.color,
+                    borderColor: colorConfig.border,
+                  }}
+                  title={colorConfig.name}
+                />
+              ))}
+            </div>
+
+            {/* Divider */}
+            <div className="w-px h-5 bg-white/20" />
+
+            {/* Close button */}
+            <button
+              type="button"
+              onMouseDown={(e) => e.stopPropagation()}
+              onClick={(e) => {
+                e.stopPropagation();
+                closeSelectionToolbar();
+              }}
+              className="p-1 text-text-muted hover:text-text-secondary transition-colors cursor-pointer"
+              title="Cancel"
+            >
+              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+              </svg>
+            </button>
+
+            {/* Arrow pointing down */}
+            <div className="absolute left-1/2 -bottom-2 -translate-x-1/2 w-0 h-0 border-l-6 border-r-6 border-t-6 border-l-transparent border-r-transparent border-t-white/20" />
+          </div>
+        )}
 
         {/* Dictionary popup - rendered inside reading area for scroll attachment */}
         {dictionaryPopup && (
@@ -843,7 +1315,9 @@ export function ChapterReader({ bookId, initialChapter, onBack }: ChapterReaderP
       </div>
 
       {/* Footer */}
-      <div className="mt-4 p-4 rounded-lg bg-surface/80 border border-white/10">
+      <div className={`mt-4 p-4 rounded-lg bg-surface/80 border border-white/10 transition-all duration-300 ${
+        isFullscreen && !showControls ? 'opacity-0 translate-y-4 pointer-events-none' : 'opacity-100 translate-y-0'
+      }`}>
         <div className="mb-4">
           <div className="h-1 bg-white/10 rounded-full overflow-hidden">
             <div
