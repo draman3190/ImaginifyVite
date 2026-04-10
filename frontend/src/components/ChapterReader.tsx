@@ -1198,14 +1198,14 @@ export function ChapterReader({ bookId, initialChapter, onBack }: ChapterReaderP
                   <button
                     key={ch.chapterNumber}
                     onClick={() => handleChapterSelect(ch.chapterNumber)}
-                    className={`w-full text-left px-4 py-2 text-sm transition-all cursor-pointer ${
+                    className={`w-full text-left px-4 py-2.5 text-sm transition-all cursor-pointer ${
                       ch.chapterNumber === currentChapter
-                        ? 'bg-ethereal-500/20 text-ethereal-300 shadow-[inset_0_0_10px_rgba(251,191,36,0.2)]'
-                        : 'text-text-secondary hover:bg-cosmic-500/10 hover:text-cosmic-300 hover:shadow-[inset_0_0_10px_rgba(139,92,246,0.1)]'
+                        ? 'bg-ethereal-500/20 text-ethereal-300 shadow-[inset_0_0_15px_rgba(251,191,36,0.25),0_0_8px_rgba(251,191,36,0.15)]'
+                        : 'text-text-secondary hover:bg-cosmic-500/10 hover:text-cosmic-300 hover:shadow-[inset_0_0_15px_rgba(139,92,246,0.15),0_0_8px_rgba(139,92,246,0.1)]'
                     }`}
                   >
-                    <span className="font-medium">Ch. {ch.chapterNumber}</span>
-                    {ch.title && <span className="ml-2 text-text-muted truncate">{ch.title}</span>}
+                    <span className="font-semibold">Ch. {ch.chapterNumber}</span>
+                    {ch.title && <span className="ml-2 font-medium">{ch.title}</span>}
                   </button>
                 ))}
               </div>
