@@ -120,6 +120,7 @@ interface TextHighlight {
   endOffset: number;
   color: string;
   borderColor: string;
+  note?: string;
   createdAt: string;
 }
 
@@ -129,6 +130,15 @@ interface SelectionToolbarState {
   text: string;
   startOffset: number;
   endOffset: number;
+}
+
+// Note editor state for adding/editing notes on highlights
+interface NoteEditorState {
+  highlightId: string;
+  x: number;
+  y: number;
+  note: string;
+  isNew: boolean; // true when adding note during highlight creation
 }
 
 // Soothing highlight colors that blend with the dark theme
@@ -243,7 +253,46 @@ export function ChapterReader({ bookId, initialChapter, onBack }: ChapterReaderP
     height: number;
     color: string;
     borderColor: string;
+    hasNote: boolean;
+    note?: string;
+    highlightText?: string;
+    isLast: boolean; // true for last bubble of each highlight
   }>>([]);
+
+  // Track which highlight is being hovered (for showing icon)
+  const [hoveredHighlightId, setHoveredHighlightId] = useState<string | null>(null);
+  const hoverTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  // Stable hover handlers to prevent flickering between multi-line highlight bubbles
+  const handleHighlightMouseEnter = useCallback((highlightId: string) => {
+    if (hoverTimeoutRef.current) {
+      clearTimeout(hoverTimeoutRef.current);
+      hoverTimeoutRef.current = null;
+    }
+    setHoveredHighlightId(highlightId);
+  }, []);
+
+  const handleHighlightMouseLeave = useCallback(() => {
+    // Small delay before removing hover state to handle gaps between bubbles
+    hoverTimeoutRef.current = setTimeout(() => {
+      setHoveredHighlightId(null);
+    }, 100);
+  }, []);
+
+  // Highlight toolbar state - appears when clicking on a highlight
+  const [highlightToolbar, setHighlightToolbar] = useState<{
+    highlightId: string;
+    x: number;
+    y: number;
+    color: string;
+    borderColor: string;
+    hasNote: boolean;
+    note?: string;
+    highlightText: string;
+  } | null>(null);
+
+  // Note editor state for adding/editing notes on highlights
+  const [noteEditor, setNoteEditor] = useState<NoteEditorState | null>(null);
 
   // Track if selection is in progress (purple) vs completed (yellow)
   const [isSelecting, setIsSelecting] = useState(false);
@@ -309,7 +358,7 @@ export function ChapterReader({ bookId, initialChapter, onBack }: ChapterReaderP
       if (!readingArea) return;
 
       const markers = readingArea.querySelectorAll('.highlight-marker');
-      const bubbles: Array<{
+      const tempBubbles: Array<{
         id: string;
         x: number;
         y: number;
@@ -317,6 +366,9 @@ export function ChapterReader({ bookId, initialChapter, onBack }: ChapterReaderP
         height: number;
         color: string;
         borderColor: string;
+        hasNote: boolean;
+        note?: string;
+        highlightText?: string;
       }> = [];
 
       const containerRect = readingArea.getBoundingClientRect();
@@ -337,7 +389,7 @@ export function ChapterReader({ bookId, initialChapter, onBack }: ChapterReaderP
           // Filter out whitespace/newline artifacts at line breaks
           // These are typically < 15px wide and appear at line endings
           if (rect.width > 15 && rect.height > 0) {
-            bubbles.push({
+            tempBubbles.push({
               id: highlightId,
               x: rect.left - containerRect.left + readingArea.scrollLeft,
               y: rect.top - containerRect.top + readingArea.scrollTop,
@@ -345,9 +397,18 @@ export function ChapterReader({ bookId, initialChapter, onBack }: ChapterReaderP
               height: rect.height,
               color: highlight.color,
               borderColor: highlight.borderColor || highlight.color,
+              hasNote: !!highlight.note,
+              note: highlight.note,
+              highlightText: highlight.text,
             });
           }
         }
+      });
+
+      // Mark the last bubble for each highlight ID
+      const bubbles = tempBubbles.map((bubble, index) => {
+        const isLastForId = tempBubbles.findIndex((b, i) => i > index && b.id === bubble.id) === -1;
+        return { ...bubble, isLast: isLastForId };
       });
 
       setHighlightBubbles(bubbles);
@@ -409,6 +470,96 @@ export function ChapterReader({ bookId, initialChapter, onBack }: ChapterReaderP
     setSelectionBubbles([]);
     window.getSelection()?.removeAllRanges();
   }, []);
+
+  // Save note to an existing highlight
+  const saveNoteToHighlight = useCallback((highlightId: string, note: string) => {
+    const updatedHighlights = highlights.map(h =>
+      h.id === highlightId ? { ...h, note: note.trim() || undefined } : h
+    );
+    setHighlights(updatedHighlights);
+    saveHighlights(bookId, updatedHighlights);
+    setNoteEditor(null);
+    setHighlightToolbar(null);
+  }, [highlights, bookId]);
+
+  // Open highlight toolbar when clicking on a highlight
+  const openHighlightToolbar = useCallback((
+    highlightId: string,
+    x: number,
+    y: number,
+    color: string,
+    borderColor: string,
+    hasNote: boolean,
+    note: string | undefined,
+    highlightText: string
+  ) => {
+    setHighlightToolbar({
+      highlightId,
+      x,
+      y,
+      color,
+      borderColor,
+      hasNote,
+      note,
+      highlightText,
+    });
+  }, []);
+
+  // Close highlight toolbar
+  const closeHighlightToolbar = useCallback(() => {
+    setHighlightToolbar(null);
+  }, []);
+
+  // Change highlight color
+  const changeHighlightColor = useCallback((highlightId: string, colorIndex: number) => {
+    const colorConfig = HIGHLIGHT_COLORS[colorIndex];
+    const updatedHighlights = highlights.map(h =>
+      h.id === highlightId
+        ? { ...h, color: colorConfig.color, borderColor: colorConfig.border }
+        : h
+    );
+    setHighlights(updatedHighlights);
+    saveHighlights(bookId, updatedHighlights);
+    setHighlightToolbar(null);
+  }, [highlights, bookId]);
+
+  // Open note editor from highlight toolbar
+  const openNoteEditorFromToolbar = useCallback(() => {
+    if (!highlightToolbar) return;
+    setNoteEditor({
+      highlightId: highlightToolbar.highlightId,
+      x: highlightToolbar.x,
+      y: highlightToolbar.y,
+      note: highlightToolbar.note || '',
+      isNew: !highlightToolbar.hasNote,
+    });
+    setHighlightToolbar(null);
+  }, [highlightToolbar]);
+
+  // Close note editor
+  const closeNoteEditor = useCallback(() => {
+    setNoteEditor(null);
+  }, []);
+
+  // Close highlight toolbar and note editor when clicking outside
+  useEffect(() => {
+    const handleClickOutside = (e: MouseEvent) => {
+      const target = e.target as HTMLElement;
+
+      // Check if click is outside highlight toolbar
+      if (highlightToolbar && !target.closest('.highlight-toolbar')) {
+        setHighlightToolbar(null);
+      }
+
+      // Check if click is outside note editor
+      if (noteEditor && !target.closest('.note-editor')) {
+        setNoteEditor(null);
+      }
+    };
+
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, [highlightToolbar, noteEditor]);
 
   // Preload images with progress tracking
   const preloadImagesWithProgress = useCallback(
@@ -1001,7 +1152,7 @@ export function ChapterReader({ bookId, initialChapter, onBack }: ChapterReaderP
       }`}
     >
       {/* Header */}
-      <div className={`flex items-center justify-between mb-4 p-4 rounded-lg bg-surface/80 border border-white/10 transition-all duration-300 ${
+      <div className={`flex items-center justify-between mb-4 p-4 rounded-lg bg-surface/80 border border-white/10 transition-all duration-300 z-50 ${
         isFullscreen && !showControls ? 'opacity-0 -translate-y-4 pointer-events-none' : 'opacity-100 translate-y-0'
       }`}>
         <button
@@ -1141,35 +1292,104 @@ export function ChapterReader({ bookId, initialChapter, onBack }: ChapterReaderP
         )}
 
         {/* Persistent highlight bubbles - rendered as overlays identical to selection bubbles */}
-        {/* Persistent highlight bubbles */}
-        {highlightBubbles.map((bubble, index) => (
-          <div
-            key={`highlight-${bubble.id}-${index}`}
-            className="absolute z-30 rounded-sm cursor-pointer transition-all duration-150 group/bubble"
-            style={{
-              left: bubble.x - 2,
-              top: bubble.y,
-              width: bubble.width + 4,
-              height: bubble.height,
-              backgroundColor: bubble.color,
-              boxShadow: `0 0 12px ${bubble.borderColor}`,
-            }}
-            title="Click to remove highlight"
-            onClick={(e) => {
-              e.stopPropagation();
-              removeHighlight(bubble.id);
-            }}
-          >
-            {/* Remove indicator on hover - only show on first bubble of each highlight */}
-            {index === 0 || highlightBubbles[index - 1]?.id !== bubble.id ? (
-              <span className="absolute -top-1 -right-1 w-4 h-4 bg-rose-500/90 rounded-full opacity-0 group-hover/bubble:opacity-100 transition-opacity flex items-center justify-center z-50">
-                <svg className="w-2.5 h-2.5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M6 18L18 6M6 6l12 12" />
-                </svg>
-              </span>
-            ) : null}
-          </div>
-        ))}
+        {(() => {
+          // Group bubbles by highlight ID
+          const highlightGroups = new Map<string, typeof highlightBubbles>();
+          highlightBubbles.forEach(bubble => {
+            const existing = highlightGroups.get(bubble.id) || [];
+            existing.push(bubble);
+            highlightGroups.set(bubble.id, existing);
+          });
+
+          return Array.from(highlightGroups.entries()).map(([highlightId, bubbles]) => {
+            const firstBubble = bubbles[0];
+            const isHovered = hoveredHighlightId === highlightId;
+
+            // Toolbar position at top-right of first bubble
+            const iconX = firstBubble.x + firstBubble.width;
+            const iconY = firstBubble.y;
+
+            return (
+              <div key={`highlight-group-${highlightId}`}>
+                {/* Visible highlight bubbles - each one handles hover/click */}
+                {bubbles.map((bubble, index) => (
+                  <div
+                    key={`highlight-${highlightId}-${index}`}
+                    className="absolute z-20 rounded-sm cursor-pointer"
+                    style={{
+                      left: bubble.x - 4,
+                      top: bubble.y - 2,
+                      width: bubble.width + 8,
+                      height: bubble.height + 4,
+                      backgroundColor: bubble.color,
+                      boxShadow: `0 0 12px ${bubble.borderColor}`,
+                    }}
+                    onMouseEnter={() => handleHighlightMouseEnter(highlightId)}
+                    onMouseLeave={handleHighlightMouseLeave}
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      openHighlightToolbar(
+                        highlightId,
+                        iconX,
+                        iconY,
+                        firstBubble.color,
+                        firstBubble.borderColor,
+                        firstBubble.hasNote,
+                        firstBubble.note,
+                        firstBubble.highlightText || ''
+                      );
+                    }}
+                  />
+                ))}
+
+                {/* Note indicator - show if highlight has a note */}
+                {firstBubble.hasNote && (
+                  <span
+                    className="absolute z-50 w-4 h-4 bg-cosmic-500/25 border border-cosmic-400/50 rounded-full flex items-center justify-center shadow-[0_0_8px_rgba(139,92,246,0.4)] pointer-events-none"
+                    style={{
+                      left: firstBubble.x - 2 - 6,
+                      top: firstBubble.y - 6,
+                    }}
+                  >
+                    <svg className="w-2 h-2 text-cosmic-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M7 8h10M7 12h4m1 8l-4-4H5a2 2 0 01-2-2V6a2 2 0 012-2h14a2 2 0 012 2v8a2 2 0 01-2 2h-3l-4 4z" />
+                    </svg>
+                  </span>
+                )}
+
+                {/* Edit icon - pencil, appears at top-right on hover */}
+                {(isHovered || highlightToolbar?.highlightId === highlightId) && (
+                  <span
+                    className={`absolute z-50 w-[26px] h-[26px] rounded-full flex items-center justify-center transition-all duration-300 pointer-events-none ${
+                      highlightToolbar?.highlightId === highlightId
+                        ? 'bg-ethereal-500/20 border border-ethereal-400/50 shadow-[0_0_12px_rgba(251,191,36,0.4)]'
+                        : 'bg-cosmic-500/15 border border-cosmic-400/40 shadow-[0_0_10px_rgba(139,92,246,0.3)]'
+                    }`}
+                    style={{
+                      left: firstBubble.x + firstBubble.width + 4,
+                      top: firstBubble.y - 16,
+                    }}
+                    title="Edit highlight"
+                  >
+                    <svg
+                      className={`w-3.5 h-3.5 transition-colors duration-300 ${
+                        highlightToolbar?.highlightId === highlightId
+                          ? 'text-ethereal-400'
+                          : 'text-cosmic-400'
+                      }`}
+                      fill="none"
+                      stroke="currentColor"
+                      viewBox="0 0 24 24"
+                      strokeWidth={2}
+                    >
+                      <path strokeLinecap="round" strokeLinejoin="round" d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z" />
+                    </svg>
+                  </span>
+                )}
+              </div>
+            );
+          });
+        })()}
 
         {/* Selection bubble highlights - rendered inside reading area for scroll attachment */}
         {selectionBubbles.map((bubble, index) => (
@@ -1245,6 +1465,168 @@ export function ChapterReader({ bookId, initialChapter, onBack }: ChapterReaderP
 
             {/* Arrow pointing down */}
             <div className="absolute left-1/2 -bottom-2 -translate-x-1/2 w-0 h-0 border-l-6 border-r-6 border-t-6 border-l-transparent border-r-transparent border-t-white/20" />
+          </div>
+        )}
+
+        {/* Note Editor - appears when adding/editing a note */}
+        {noteEditor && (
+          <div
+            className="note-editor absolute z-50 w-72 bg-surface/98 backdrop-blur-lg border border-cosmic-400/30 rounded-xl shadow-2xl shadow-cosmic-500/20 overflow-hidden animate-in fade-in slide-in-from-top-2 duration-200"
+            style={{
+              left: Math.max(150, Math.min(noteEditor.x - 140, (readingAreaRef.current?.clientWidth || 400) - 300)),
+              top: noteEditor.y + 8,
+            }}
+            onMouseDown={(e) => e.stopPropagation()}
+          >
+            {/* Header */}
+            <div className="px-4 py-3 bg-cosmic-500/10 border-b border-cosmic-400/20">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-2">
+                  <svg className="w-4 h-4 text-cosmic-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z" />
+                  </svg>
+                  <span className="text-sm font-medium text-text-primary">Add Note</span>
+                </div>
+                <button
+                  type="button"
+                  onClick={closeNoteEditor}
+                  className="p-1 text-text-muted hover:text-text-secondary transition-colors cursor-pointer"
+                >
+                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                  </svg>
+                </button>
+              </div>
+            </div>
+
+            {/* Note input */}
+            <div className="p-4">
+              <textarea
+                autoFocus
+                placeholder="Write your thoughts, insights, or annotations..."
+                className="w-full h-24 px-3 py-2 bg-white/5 border border-white/10 rounded-lg text-sm text-text-primary placeholder:text-text-muted/50 focus:outline-none focus:border-cosmic-400/50 focus:ring-1 focus:ring-cosmic-400/30 resize-none"
+                value={noteEditor.note}
+                onChange={(e) => setNoteEditor({ ...noteEditor, note: e.target.value })}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter' && e.metaKey) {
+                    saveNoteToHighlight(noteEditor.highlightId, noteEditor.note);
+                  }
+                  if (e.key === 'Escape') {
+                    closeNoteEditor();
+                  }
+                }}
+              />
+
+              {/* Action buttons */}
+              <div className="flex justify-between items-center mt-3">
+                <span className="text-[10px] text-text-muted">⌘+Enter to save</span>
+                <div className="flex gap-2">
+                  <button
+                    type="button"
+                    onClick={closeNoteEditor}
+                    className="px-3 py-1.5 text-xs text-text-muted hover:text-text-secondary transition-colors cursor-pointer"
+                  >
+                    Skip
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => saveNoteToHighlight(noteEditor.highlightId, noteEditor.note)}
+                    className="px-4 py-1.5 text-xs bg-cosmic-500/80 hover:bg-cosmic-500 text-white rounded-lg transition-colors cursor-pointer"
+                  >
+                    Save Note
+                  </button>
+                </div>
+              </div>
+            </div>
+
+            {/* Decorative glow */}
+            <div className="absolute -top-20 -right-20 w-40 h-40 bg-cosmic-500/20 rounded-full blur-3xl pointer-events-none" />
+          </div>
+        )}
+
+        {/* Highlight Toolbar - appears when clicking highlighted text */}
+        {highlightToolbar && (
+          <div
+            className="highlight-toolbar absolute z-50 bg-surface/98 backdrop-blur-lg border border-cosmic-400/30 rounded-xl shadow-2xl shadow-cosmic-500/20 overflow-hidden animate-in fade-in slide-in-from-top-2 duration-200"
+            style={{
+              left: Math.max(90, Math.min(highlightToolbar.x - 80, (readingAreaRef.current?.clientWidth || 400) - 180)),
+              top: highlightToolbar.y + 16,
+            }}
+            onMouseDown={(e) => e.stopPropagation()}
+            onMouseEnter={() => handleHighlightMouseEnter(highlightToolbar.highlightId)}
+            onMouseLeave={handleHighlightMouseLeave}
+          >
+            {/* Compact vertical layout */}
+            <div className="p-2 min-w-[160px]">
+              {/* Note preview at top if exists */}
+              {highlightToolbar.hasNote && highlightToolbar.note && (
+                <div className="mb-2 p-2 bg-cosmic-500/10 rounded-lg border border-cosmic-400/20">
+                  <p className="text-xs text-text-secondary line-clamp-2 italic">
+                    "{highlightToolbar.note}"
+                  </p>
+                </div>
+              )}
+
+              {/* Color swatches row */}
+              <div className="flex items-center gap-3 mb-2 px-1">
+                <span className="text-[10px] text-text-secondary/80 uppercase tracking-wider font-medium">Color</span>
+                <div className="flex items-center gap-1.5">
+                  {HIGHLIGHT_COLORS.map((colorConfig, index) => (
+                    <button
+                      key={colorConfig.name}
+                      type="button"
+                      onClick={() => changeHighlightColor(highlightToolbar.highlightId, index)}
+                      className={`w-5 h-5 rounded-full border-2 transition-all hover:scale-110 cursor-pointer ${
+                        highlightToolbar.color === colorConfig.color ? 'ring-2 ring-white/50 ring-offset-1 ring-offset-surface' : ''
+                      }`}
+                      style={{
+                        backgroundColor: colorConfig.color,
+                        borderColor: colorConfig.border,
+                      }}
+                      title={colorConfig.name}
+                    />
+                  ))}
+                </div>
+              </div>
+
+              {/* Divider */}
+              <div className="h-px bg-white/10 my-2" />
+
+              {/* Action buttons - stacked */}
+              <div className="space-y-1">
+                {/* Add/Edit Note button */}
+                <button
+                  type="button"
+                  onClick={openNoteEditorFromToolbar}
+                  className="w-full flex items-center gap-2 px-2 py-1.5 text-xs text-text-secondary hover:text-cosmic-400 hover:bg-cosmic-500/10 rounded-lg transition-colors cursor-pointer"
+                  title={highlightToolbar.hasNote ? "Edit note" : "Add note"}
+                >
+                  <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 8h10M7 12h4m1 8l-4-4H5a2 2 0 01-2-2V6a2 2 0 012-2h14a2 2 0 012 2v8a2 2 0 01-2 2h-3l-4 4z" />
+                  </svg>
+                  {highlightToolbar.hasNote ? 'Edit Note' : 'Add Note'}
+                </button>
+
+                {/* Delete button */}
+                <button
+                  type="button"
+                  onClick={() => {
+                    removeHighlight(highlightToolbar.highlightId);
+                    closeHighlightToolbar();
+                  }}
+                  className="w-full flex items-center gap-2 px-2 py-1.5 text-xs text-rose-400/70 hover:text-rose-400 hover:bg-rose-500/10 rounded-lg transition-colors cursor-pointer"
+                  title="Remove highlight"
+                >
+                  <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                  </svg>
+                  Remove Highlight
+                </button>
+              </div>
+            </div>
+
+            {/* Arrow pointing up toward the highlight */}
+            <div className="absolute left-1/2 -top-1.5 -translate-x-1/2 w-0 h-0 border-l-6 border-r-6 border-b-6 border-l-transparent border-r-transparent border-b-cosmic-400/30" />
           </div>
         )}
 
