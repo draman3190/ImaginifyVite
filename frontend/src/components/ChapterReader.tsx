@@ -306,6 +306,19 @@ export function ChapterReader({ bookId, initialChapter, onBack }: ChapterReaderP
   const containerRef = useRef<HTMLDivElement>(null);
   const readingAreaRef = useRef<HTMLDivElement>(null);
 
+  // Track previous fullscreen state to detect actual changes
+  const prevIsFullscreenRef = useRef(false);
+
+  // Track if we're in a fullscreen transition (to avoid clearing selection ref)
+  const inFullscreenTransitionRef = useRef(false);
+
+  // Continuously track selection state so it persists through clicks that clear browser selection
+  // This is updated by selectionchange events and used to restore after fullscreen transitions
+  const lastSelectionRef = useRef<{
+    range: Range | null;
+    toolbar: SelectionToolbarState | null;
+  }>({ range: null, toolbar: null });
+
   // Ref for selection timeout to persist across re-renders
   const selectionTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
@@ -317,6 +330,9 @@ export function ChapterReader({ bookId, initialChapter, onBack }: ChapterReaderP
 
   // Ref to track mouse position on mousedown (to detect drag vs click)
   const mouseDownPosRef = useRef<{ x: number; y: number } | null>(null);
+
+  // Ref to track if mousedown was inside reading area (to preserve selection on outside clicks)
+  const mouseDownInReadingAreaRef = useRef(false);
 
   // Prevent duplicate chapter loads
   const loadingChapterRef = useRef<number | null>(null);
@@ -413,20 +429,140 @@ export function ChapterReader({ bookId, initialChapter, onBack }: ChapterReaderP
     setHighlightBubbles(bubbles);
   }, [highlights]);
 
+  // Recalculate selection bubbles from current browser selection
+  const updateSelectionBubbles = useCallback(() => {
+    const selection = window.getSelection();
+    const selectedText = selection?.toString();
+    const readingArea = readingAreaRef.current;
+
+    if (selectedText && selection?.rangeCount && readingArea) {
+      const range = selection.getRangeAt(0);
+      const rects = range.getClientRects();
+      const containerRect = readingArea.getBoundingClientRect();
+      const bubbles: Array<{ x: number; y: number; width: number; height: number }> = [];
+
+      for (let i = 0; i < rects.length; i++) {
+        const rect = rects[i];
+        if (rect.width > 15 && rect.height > 0) {
+          bubbles.push({
+            x: rect.left - containerRect.left + readingArea.scrollLeft,
+            y: rect.top - containerRect.top + readingArea.scrollTop,
+            width: rect.width,
+            height: rect.height,
+          });
+        }
+      }
+      setSelectionBubbles(bubbles);
+
+      // Also update toolbar position if it exists
+      if (selectionToolbar) {
+        const firstRect = range.getBoundingClientRect();
+        setSelectionToolbar(prev => prev ? {
+          ...prev,
+          x: firstRect.left + firstRect.width / 2 - containerRect.left + readingArea.scrollLeft,
+          y: firstRect.top - containerRect.top + readingArea.scrollTop - 10,
+        } : null);
+      }
+    }
+  }, [selectionToolbar]);
+
   // Recalculate highlight bubbles when content changes
   useEffect(() => {
     const timeoutId = setTimeout(calculateHighlightBubbles, 50);
     return () => clearTimeout(timeoutId);
   }, [calculateHighlightBubbles, currentPage, currentChapter, chapter]);
 
-  // Recalculate highlights when fullscreen changes - hide during transition to avoid glitch
+  // Recalculate highlights when fullscreen changes - reposition instantly
   useEffect(() => {
-    // Clear bubbles immediately to hide them during transition
-    setHighlightBubbles([]);
+    // Only run when fullscreen actually changes, not on other dependency changes
+    if (prevIsFullscreenRef.current === isFullscreen) {
+      return;
+    }
+    prevIsFullscreenRef.current = isFullscreen;
 
-    // Recalculate after transition completes (fullscreen transitions typically take ~300ms)
-    const timeoutId = setTimeout(calculateHighlightBubbles, 350);
-    return () => clearTimeout(timeoutId);
+    // Mark that we're in a transition (prevents lastSelectionRef from being cleared)
+    inFullscreenTransitionRef.current = true;
+
+    // Use the continuously tracked selection (saved BEFORE any click cleared it)
+    const savedRange = lastSelectionRef.current.range;
+
+    // Restore selection immediately
+    const currentSelection = window.getSelection();
+    if (savedRange && currentSelection) {
+      try {
+        currentSelection.removeAllRanges();
+        currentSelection.addRange(savedRange);
+      } catch {
+        // Range may be invalid after DOM changes, ignore
+      }
+    }
+
+    // Reposition after DOM settles - use double RAF for reliable timing after reflow
+    requestAnimationFrame(() => {
+      requestAnimationFrame(() => {
+        calculateHighlightBubbles();
+
+        // Inline selection bubble and toolbar calculation
+        const readingArea = readingAreaRef.current;
+        const sel = window.getSelection();
+        const selectedText = sel?.toString();
+
+        if (selectedText && sel?.rangeCount && readingArea) {
+          const range = sel.getRangeAt(0);
+          const rects = range.getClientRects();
+          const containerRect = readingArea.getBoundingClientRect();
+
+          // Calculate selection bubbles
+          const bubbles: Array<{ x: number; y: number; width: number; height: number }> = [];
+          for (let i = 0; i < rects.length; i++) {
+            const rect = rects[i];
+            if (rect.width > 15 && rect.height > 0) {
+              bubbles.push({
+                x: rect.left - containerRect.left + readingArea.scrollLeft,
+                y: rect.top - containerRect.top + readingArea.scrollTop,
+                width: rect.width,
+                height: rect.height,
+              });
+            }
+          }
+          setSelectionBubbles(bubbles);
+
+          // Update toolbar position
+          const firstRect = range.getBoundingClientRect();
+          const textContainer = readingArea.querySelector('.chapter-text-content');
+          let startOffset = 0;
+          let endOffset = 0;
+
+          if (textContainer && range.startContainer.nodeType === Node.TEXT_NODE) {
+            const walker = document.createTreeWalker(textContainer, NodeFilter.SHOW_TEXT);
+            let currentOffset = 0;
+            let node: Node | null;
+
+            while ((node = walker.nextNode())) {
+              if (node === range.startContainer) {
+                startOffset = currentOffset + range.startOffset;
+              }
+              if (node === range.endContainer) {
+                endOffset = currentOffset + range.endOffset;
+                break;
+              }
+              currentOffset += (node.textContent?.length || 0);
+            }
+          }
+
+          setSelectionToolbar({
+            x: firstRect.left + firstRect.width / 2 - containerRect.left + readingArea.scrollLeft,
+            y: firstRect.top - containerRect.top + readingArea.scrollTop - 10,
+            text: selectedText.trim(),
+            startOffset,
+            endOffset,
+          });
+        }
+
+        // Transition complete
+        inFullscreenTransitionRef.current = false;
+      });
+    });
   }, [calculateHighlightBubbles, isFullscreen]);
 
   // Use ResizeObserver to recalculate highlights when reading area resizes (window resize)
@@ -439,7 +575,10 @@ export function ChapterReader({ bookId, initialChapter, onBack }: ChapterReaderP
       // Debounce and use requestAnimationFrame for accurate layout
       clearTimeout(resizeTimeout);
       resizeTimeout = setTimeout(() => {
-        requestAnimationFrame(calculateHighlightBubbles);
+        requestAnimationFrame(() => {
+          calculateHighlightBubbles();
+          updateSelectionBubbles();
+        });
       }, 100);
     });
 
@@ -449,7 +588,15 @@ export function ChapterReader({ bookId, initialChapter, onBack }: ChapterReaderP
       clearTimeout(resizeTimeout);
       resizeObserver.disconnect();
     };
-  }, [calculateHighlightBubbles]);
+  }, [calculateHighlightBubbles, updateSelectionBubbles]);
+
+  // Clear lastSelectionRef when toolbar is deliberately dismissed (not during fullscreen transitions)
+  // Note: The ref is populated directly in handleMouseUp when toolbar is created
+  useEffect(() => {
+    if (!selectionToolbar && !inFullscreenTransitionRef.current) {
+      lastSelectionRef.current = { range: null, toolbar: null };
+    }
+  }, [selectionToolbar]);
 
   // Apply a highlight to the selected text
   const applyHighlight = useCallback((colorIndex: number) => {
@@ -917,12 +1064,17 @@ export function ChapterReader({ bookId, initialChapter, onBack }: ChapterReaderP
           }
         }
         setSelectionBubbles(bubbles);
-      } else {
+      } else if (mouseDownInReadingAreaRef.current) {
+        // Only clear bubbles if the interaction was inside the reading area
+        // This preserves selection when clicking header/footer buttons
         setSelectionBubbles([]);
       }
     };
 
     const handleMouseDown = (e: MouseEvent) => {
+      // Mark that mousedown happened inside reading area
+      mouseDownInReadingAreaRef.current = true;
+
       const now = Date.now();
       const timeSinceLastClick = now - lastMouseDownTimeRef.current;
       lastMouseDownTimeRef.current = now;
@@ -961,6 +1113,9 @@ export function ChapterReader({ bookId, initialChapter, onBack }: ChapterReaderP
     };
 
     const handleMouseUp = (e: MouseEvent) => {
+      // Reset the flag after a short delay to allow selectionchange to process first
+      setTimeout(() => { mouseDownInReadingAreaRef.current = false; }, 0);
+
       if ((e.target as HTMLElement).closest('.dictionary-popup')) return;
       if ((e.target as HTMLElement).closest('.selection-toolbar')) return;
 
@@ -1035,13 +1190,21 @@ export function ChapterReader({ bookId, initialChapter, onBack }: ChapterReaderP
             }
           }
 
-          setSelectionToolbar({
+          const newToolbar = {
             x: rect.left + rect.width / 2 - containerRect.left + readingArea.scrollLeft,
             y: rect.top - containerRect.top + readingArea.scrollTop - 10,
             text: selectedText,
             startOffset,
             endOffset,
-          });
+          };
+
+          // Save to ref immediately (for fullscreen transitions - before any click clears selection)
+          lastSelectionRef.current = {
+            range: range.cloneRange(),
+            toolbar: newToolbar,
+          };
+
+          setSelectionToolbar(newToolbar);
         }
       }
 
@@ -1444,7 +1607,7 @@ export function ChapterReader({ bookId, initialChapter, onBack }: ChapterReaderP
         {/* Selection toolbar - appears when text is selected */}
         {selectionToolbar && !dictionaryPopup && (
           <div
-            className="selection-toolbar absolute z-50 flex items-center gap-1 p-1.5 bg-surface/95 backdrop-blur border border-white/20 rounded-lg shadow-xl transition-all duration-200"
+            className="selection-toolbar absolute z-50 flex items-center gap-1 p-1.5 bg-surface/95 backdrop-blur border border-white/20 rounded-lg shadow-xl"
             style={{
               left: Math.max(80, Math.min(selectionToolbar.x, (readingAreaRef.current?.clientWidth || 400) - 80)),
               top: Math.max(20, selectionToolbar.y - 8),
